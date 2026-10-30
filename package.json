@@ -1,0 +1,8 @@
+{
+  "name": "md2slides",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "slides": "node md2slides.js"
+  }
+}
