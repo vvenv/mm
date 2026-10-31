@@ -133,6 +133,7 @@ function finish(raw) {
   return {
     number: raw.number,
     chapter: raw.chapter || "演讲",
+    subsection: raw.subsection || "",
     title,
     points,
     notes,

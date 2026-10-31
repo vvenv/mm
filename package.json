@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.22.0",
   "scripts": {
-    "slides": "node md2slides.js"
+    "slides": "node md2slides.js",
+    "mindmap": "node md2mindmap.js"
   }
 }
