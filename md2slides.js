@@ -2,7 +2,7 @@
 /**
  * 把讲稿 Markdown 直接做成 Keynote。
  *
- * 屏上是副标题和主标题（主标题里的 ｜ 换成换行）。口播写进演讲者备注。
+ * 屏上是主标题和几句关键句。口播写进演讲者备注。
  * 通过 Keynote 自己的脚本接口建文档，不经过 PowerPoint。
  *
  *   node md2slides.js
@@ -23,10 +23,6 @@ const INK = "000000";
 
 function cleanMarker(text) {
   return text.replace(/\s*·\s*[🆕✏️]\s*$/u, "").replace(/[🆕✏️]/gu, "").trim();
-}
-
-function sameText(a, b) {
-  return String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
 }
 
 function parse(markdown) {
@@ -60,10 +56,11 @@ function parse(markdown) {
         heading: cleanMarker(slideHead[2]),
         chapter,
         subsection,
-        kicker: "",
         title: "",
+        points: [],
         notes: [],
         inNotes: false,
+        inPoints: false,
       };
       continue;
     }
@@ -86,22 +83,34 @@ function parse(markdown) {
     if (!current) continue;
     if (/^---\s*$/.test(line)) {
       current.inNotes = false;
+      current.inPoints = false;
       continue;
     }
 
-    const kicker = line.match(/^-\s+\*\*副标题\*\*:\s*(.+)$/);
-    if (kicker) {
-      current.kicker = kicker[1].trim();
-      continue;
-    }
     const title = line.match(/^-\s+\*\*主标题\*\*:\s*(.+)$/);
     if (title) {
       current.title = title[1].trim();
+      current.inPoints = false;
+      continue;
+    }
+    if (/^\*\*关键句\*\*\s*$/.test(line)) {
+      current.inNotes = false;
+      current.inPoints = true;
       continue;
     }
     if (/^\*\*口播\*\*\s*$/.test(line)) {
       current.inNotes = true;
+      current.inPoints = false;
       continue;
+    }
+    if (current.inPoints) {
+      const item = line.match(/^-\s+(.+)$/);
+      if (item) {
+        current.points.push(item[1].trim());
+        continue;
+      }
+      if (!line.trim()) continue;
+      current.inPoints = false;
     }
     if (current.inNotes) {
       const stage = line.match(/^#{5,6}\s+(.+)$/);
@@ -115,12 +124,8 @@ function parse(markdown) {
 }
 
 function finish(raw) {
-  const main = (raw.title || raw.heading).trim();
-  const lines = main.split(/\s*[|｜]\s*/).map((part) => part.trim()).filter(Boolean);
-  let kicker = raw.kicker.trim();
-  if (!raw.title && sameText(kicker, raw.heading)) kicker = "";
-  if (sameText(kicker, main)) kicker = "";
-
+  const title = (raw.title || raw.heading).trim();
+  const points = raw.points.map((point) => point.trim()).filter(Boolean);
   const where = [raw.chapter, raw.subsection].filter(Boolean).join(" · ");
   const body = raw.notes.join("\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   const notes = [where, body].filter(Boolean).join("\n\n");
@@ -128,29 +133,68 @@ function finish(raw) {
   return {
     number: raw.number,
     chapter: raw.chapter || "演讲",
-    kicker,
-    lines,
+    title,
+    points,
     notes,
   };
 }
 
-function emUnits(text) {
-  let n = 0;
-  for (const ch of text) n += ch.charCodeAt(0) <= 0xff ? 0.56 : 1;
-  return Math.max(n, 1);
+function wrapText(text, size, maxWidth) {
+  const maxEm = maxWidth / size;
+  const lines = [];
+  let buf = "";
+  let em = 0;
+  for (const ch of text) {
+    const w = ch.charCodeAt(0) <= 0xff ? 0.62 : 1;
+    if (buf && em + w > maxEm) {
+      lines.push(buf);
+      buf = ch;
+      em = w;
+    } else {
+      buf += ch;
+      em += w;
+    }
+  }
+  if (buf) lines.push(buf);
+  return lines.length ? lines : [""];
 }
 
-function titleSize(lines) {
-  const widest = Math.max(...lines.map(emUnits));
-  let size = Math.floor((TEXT_W * 0.92) / widest);
-  const cap = lines.length >= 5 ? 72 : lines.length >= 4 ? 84 : lines.length >= 3 ? 100 : lines.length === 2 ? 120 : 156;
-  size = Math.min(size, cap);
-  while (size > 56) {
-    const block = lines.length * size * 1.32 + 140;
-    if (block <= 920) break;
-    size -= 2;
+function planSlide(slide, titleSize, pointSize) {
+  const titleLineH = Math.round(titleSize * 1.28);
+  const pointLineH = Math.round(pointSize * 1.45);
+  const pointGap = Math.round(pointSize * 0.85);
+  const titleGap = Math.round(titleSize * 0.95);
+  const boxes = [];
+  let y = 0;
+
+  for (const line of wrapText(slide.title, titleSize, TEXT_W)) {
+    boxes.push({ text: line, font: TITLE_FONT, size: titleSize, color: INK, y, h: titleLineH });
+    y += titleLineH;
   }
-  return size;
+  y += titleGap;
+
+  slide.points.forEach((point, index) => {
+    const lines = wrapText(point, pointSize, TEXT_W);
+    for (const line of lines) {
+      boxes.push({ text: line, font: BODY_FONT, size: pointSize, color: INK, y, h: pointLineH });
+      y += pointLineH;
+    }
+    if (index < slide.points.length - 1) y += pointGap;
+  });
+
+  return { boxes, height: y };
+}
+
+function chooseLayout(slide) {
+  let titleSize = 76;
+  let pointSize = 40;
+  let plan = planSlide(slide, titleSize, pointSize);
+  while (plan.height > 820 && pointSize > 30) {
+    pointSize -= 2;
+    if (titleSize > 60) titleSize -= 2;
+    plan = planSlide(slide, titleSize, pointSize);
+  }
+  return plan;
 }
 
 function measureWidths(items) {
@@ -193,37 +237,30 @@ function asString(value) {
 function layoutSlides(slides) {
   const pending = [];
   const laid = slides.map((slide) => {
-    const size = titleSize(slide.lines);
-    const lineH = Math.round(size * 1.28);
-    const kickerSize = 34;
-    const kickerH = slide.kicker ? 52 : 0;
-    const gap = slide.kicker ? 36 : 0;
-    const numberSize = 22;
-    const block = kickerH + gap + slide.lines.length * lineH;
-    let y = Math.round((SLIDE_H - block) / 2);
-    const boxes = [];
-    const add = (text, font, boxSize, color, yPos, h) => {
-      const index = pending.length;
-      pending.push({ text, font, size: boxSize });
-      boxes.push({ index, text, font, size: boxSize, color, y: yPos, h });
-    };
-    if (slide.kicker) {
-      add(slide.kicker, BODY_FONT, kickerSize, INK, y, kickerH);
-      y += kickerH + gap;
-    }
-    for (const line of slide.lines) {
-      add(line, TITLE_FONT, size, INK, y, lineH);
-      y += lineH;
-    }
-    add(String(slide.number), BODY_FONT, numberSize, INK, 1020, 36);
+    const plan = chooseLayout(slide);
+    const free = SLIDE_H - 120 - plan.height;
+    const y0 = Math.max(88, Math.round(free * 0.42));
+    const boxes = plan.boxes.map((box) => {
+      const placed = { ...box, y: box.y + y0 };
+      placed.index = pending.length;
+      pending.push({ text: placed.text, font: placed.font, size: placed.size });
+      return placed;
+    });
+    const number = { text: String(slide.number), font: BODY_FONT, size: 22, color: INK, y: 1020, h: 36 };
+    number.index = pending.length;
+    pending.push({ text: number.text, font: number.font, size: number.size });
+    boxes.push(number);
     return { ...slide, boxes };
   });
   const widths = measureWidths(pending.map(({ text, font, size }) => ({ text, font, size })));
   for (const slide of laid) {
     for (const box of slide.boxes) {
-      const measured = Math.ceil(widths[box.index] + 8);
+      const measured = Math.ceil(widths[box.index] + 12);
       box.w = Math.max(measured, 24);
       box.x = box.y > 1000 ? SLIDE_W - 56 - box.w : Math.round((SLIDE_W - box.w) / 2);
+      if (box.y < 1000 && (box.x < 36 || box.x + box.w > SLIDE_W - 36)) {
+        throw new Error(`第 ${slide.number} 页文字超出画布：${box.text}`);
+      }
     }
   }
   return laid;
@@ -284,6 +321,8 @@ function main() {
   const slides = parse(fs.readFileSync(input, "utf8"));
   slides.forEach((slide, index) => {
     if (slide.number !== index + 1) throw new Error(`页码不连续：第 ${index + 1} 位是 ${slide.number}`);
+    if (!slide.title) throw new Error(`第 ${slide.number} 页没有主标题`);
+    if (slide.points.length < 2) throw new Error(`第 ${slide.number} 页至少需要两句关键句`);
   });
   fs.rmSync(output, { force: true });
   buildKeynote(slides, output);
