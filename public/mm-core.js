@@ -367,12 +367,16 @@ export function toInteractiveHtml(tree) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(pageTitle)} · 思维导图</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden; }
+  html, body {
+    margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-size: 13px; line-height: 1.4;
+  }
   svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
   svg.dragging { cursor: grabbing; }
   .hint {
     position: fixed; top: 14px; right: 18px; margin: 0;
-    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    font-size: 13px; line-height: 1.4;
     color: #999; pointer-events: none;
   }
   .note-pop {
@@ -385,7 +389,7 @@ export function toInteractiveHtml(tree) {
   .note-pop.show { display: block; }
   .note-pop .note-view {
     margin: 0; padding: 12px 14px; min-height: 72px; max-height: 240px; overflow: auto;
-    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    font-size: 13px; line-height: 1.5;
     white-space: pre-wrap; word-break: break-word; color: #333;
   }
 </style>

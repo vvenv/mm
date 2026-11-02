@@ -16,6 +16,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="mm" />
     <style>
+      :root {
+        --font-body:
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+          sans-serif;
+        --font-title:
+          "Songti SC", "STSongti-SC-Regular", "Noto Serif SC", "SimSun", serif;
+      }
       html,
       body {
         margin: 0;
@@ -23,6 +30,15 @@
         background: #fff;
         color: #111;
         overflow: hidden;
+        font-family: var(--font-body);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
       }
       svg {
         width: 100%;
@@ -57,10 +73,8 @@
         border-radius: 6px;
         background: #fff;
         color: #111;
-        font:
-          13px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1;
         cursor: pointer;
       }
       .toolbar button {
@@ -113,10 +127,8 @@
         border-radius: 6px;
         background: transparent;
         color: #777;
-        font:
-          13px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1;
       }
       .toolbar .mode-switch button:hover:not(:disabled) {
         border-color: transparent;
@@ -186,10 +198,8 @@
         background: #fff;
         color: #333;
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
-        font:
-          13px/1.45 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
@@ -229,10 +239,8 @@
           url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")
           no-repeat right 8px center;
         color: #111;
-        font:
-          13px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1;
         cursor: pointer;
       }
       .settings-row select:hover {
@@ -265,10 +273,8 @@
         min-height: 72px;
         max-height: 240px;
         overflow: auto;
-        font:
-          13px/1.5 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
         color: #333;
@@ -289,10 +295,8 @@
         resize: vertical;
         min-height: 120px;
         max-height: 280px;
-        font:
-          13px/1.5 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
         color: #222;
         background: #fff;
       }
@@ -320,10 +324,8 @@
         border-radius: 6px;
         background: #fff;
         color: #111;
-        font:
-          12px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 12px;
+        line-height: 1;
         cursor: pointer;
       }
       .note-pop .note-foot button.primary {
@@ -367,10 +369,8 @@
         border-radius: 8px;
         background: #fff;
         color: #111;
-        font:
-          13px/1.3 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.3;
       }
       .icon-pop .icon-search:focus {
         outline: none;
@@ -395,10 +395,8 @@
         border-radius: 7px;
         background: transparent;
         color: #666;
-        font:
-          12px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 12px;
+        line-height: 1;
         cursor: pointer;
         white-space: nowrap;
       }
@@ -446,10 +444,8 @@
         padding: 48px 20px;
         text-align: center;
         color: #999;
-        font:
-          13px/1.5 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
         white-space: normal;
       }
       .icon-pop .icon-foot {
@@ -468,10 +464,8 @@
         border-radius: 6px;
         background: #fff;
         color: #111;
-        font:
-          12px/1 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 12px;
+        line-height: 1;
         cursor: pointer;
       }
       .icon-pop .icon-foot button:hover {
@@ -487,10 +481,8 @@
         border-radius: 6px;
         background: #111;
         color: #fff;
-        font:
-          13px/1.4 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.4;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s;
@@ -509,10 +501,8 @@
         background: rgba(255, 255, 255, 0.82);
         border: 2px dashed #111;
         box-sizing: border-box;
-        font:
-          18px/1.4 "Songti SC",
-          "STSongti-SC-Regular",
-          serif;
+        font-size: 18px;
+        line-height: 1.4;
         color: #111;
         pointer-events: none;
       }
@@ -612,26 +602,21 @@
       }
       .modal h2 {
         margin: 0 0 8px;
-        font:
-          700 18px/1.3 "Songti SC",
-          "STSongti-SC-Regular",
-          serif;
+        font-weight: 700;
+        font-size: 18px;
+        line-height: 1.3;
       }
       .modal p {
         margin: 0 0 16px;
-        font:
-          14px/1.5 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
         color: #333;
       }
       .modal label {
         display: block;
         margin: 0 0 6px;
-        font:
-          13px/1.3 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 13px;
+        line-height: 1.3;
         color: #555;
       }
       .modal input[type="text"],
@@ -644,10 +629,8 @@
         border-radius: 6px;
         background: #fff;
         color: #111;
-        font:
-          14px/1.3 "PingFang SC",
-          "Hiragino Sans GB",
-          sans-serif;
+        font-size: 14px;
+        line-height: 1.3;
       }
       .modal select:disabled,
       .modal option:disabled {
@@ -1157,14 +1140,16 @@
         { id: "recent", label: "最近" },
         ...EMOJI_CATEGORIES.map((c) => ({ id: c.id, label: c.label })),
       ];
-      let sans = fontStacksFor(fontId).body;
-      let styles = buildLevelStyles(fontId);
+      let sans;
+      let styles;
 
       function applyFont(nextId, { persist = true, announce = false } = {}) {
         fontId = normalizeFontId(nextId);
         const stacks = fontStacksFor(fontId);
         sans = stacks.body;
         styles = buildLevelStyles(fontId);
+        document.documentElement.style.setProperty("--font-body", stacks.body);
+        document.documentElement.style.setProperty("--font-title", stacks.title);
         fontSelect.value = fontId;
         if (persist) writeFontId(fontId);
         if (editing) commitEdit(true);
@@ -1185,7 +1170,7 @@
         option.textContent = preset.label;
         fontSelect.appendChild(option);
       });
-      fontSelect.value = fontId;
+      applyFont(fontId, { persist: false });
 
       function descText(node) {
         return node && node.desc ? String(node.desc).trim() : "";
