@@ -159,3 +159,74 @@ export function createLocalStore(storage = globalThis.localStorage, key = STORAG
     },
   };
 }
+
+/** Index path from root → node, e.g. [1, 0] for tree.children[1].children[0]. */
+export function pathToNode(root, target) {
+  if (root === target) return [];
+  function walk(node, path) {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      const next = path.concat(i);
+      if (child === target) return next;
+      const found = walk(child, next);
+      if (found) return found;
+    }
+    return null;
+  }
+  return walk(root, []);
+}
+
+export function nodeAtPath(root, path) {
+  if (!root) return null;
+  if (!path || !path.length) return root;
+  let node = root;
+  for (const index of path) {
+    if (!node.children || !node.children[index]) return null;
+    node = node.children[index];
+  }
+  return node;
+}
+
+export function captureState(tree, fileName, selected) {
+  return {
+    tree: cloneData(tree),
+    fileName,
+    selectedPath: selected ? pathToNode(tree, selected) : null,
+  };
+}
+
+export function createHistory(limit = 80) {
+  const undoStack = [];
+  const redoStack = [];
+  return {
+    push(snapshot) {
+      if (!snapshot || !snapshot.tree) return;
+      undoStack.push(snapshot);
+      if (undoStack.length > limit) undoStack.shift();
+      redoStack.length = 0;
+    },
+    undo(current) {
+      if (!undoStack.length) return null;
+      redoStack.push(current);
+      return undoStack.pop();
+    },
+    redo(current) {
+      if (!redoStack.length) return null;
+      undoStack.push(current);
+      return redoStack.pop();
+    },
+    canUndo() {
+      return undoStack.length > 0;
+    },
+    canRedo() {
+      return redoStack.length > 0;
+    },
+    clear() {
+      undoStack.length = 0;
+      redoStack.length = 0;
+    },
+    sizes() {
+      return { undo: undoStack.length, redo: redoStack.length };
+    },
+  };
+}

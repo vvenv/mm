@@ -6,11 +6,15 @@ import { fileURLToPath } from "node:url";
 import {
   DOUBLE_TAP_MS,
   buildDownload,
+  captureState,
   cloneData,
   countNodes,
+  createHistory,
   createLocalStore,
+  nodeAtPath,
   normalizeDownloadName,
   parseMarkdown,
+  pathToNode,
   recognizeNodeTap,
   shouldConfirmOverwrite,
   toMarkdown,
@@ -117,9 +121,16 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /recognizeNodeTap/);
   assert.match(html, /from "\.\/mm-core\.js(?:\?[^"]*)?"/);
   assert.equal(/addEventListener\(\s*["']dblclick["']/.test(html), false);
-  assert.match(html, /node-actions/);
+  assert.match(html, /ctx-menu/);
   assert.match(html, /confirmModal/);
   assert.match(html, /downloadModal/);
+  assert.match(html, /undoBtn/);
+  assert.match(html, /redoBtn/);
+  assert.match(html, /showCtxMenu/);
+  assert.match(html, /LONG_PRESS_MS/);
+  assert.match(html, /isSecondaryPointer/);
+  assert.match(html, /data-node-path/);
+  assert.equal(/requestDelete/.test(html), false);
 });
 
 test("shouldConfirmOverwrite when the current map has content", () => {
@@ -141,6 +152,35 @@ test("normalizeDownloadName and buildDownload for markdown", () => {
 test("countNodes includes the node itself", () => {
   const tree = parseMarkdown("# R\n\n- a\n  - b\n- c\n");
   assert.equal(countNodes(tree), 4);
+});
+
+test("createHistory undo/redo restores snapshots", () => {
+  const history = createHistory(3);
+  const a = parseMarkdown("# A\n\n- 1\n");
+  const b = parseMarkdown("# B\n\n- 2\n");
+  const c = parseMarkdown("# C\n\n- 3\n");
+  history.push(captureState(a, "a.md", a));
+  history.push(captureState(b, "b.md", b.children[0]));
+  assert.equal(history.canUndo(), true);
+  assert.equal(history.canRedo(), false);
+
+  const back = history.undo(captureState(c, "c.md", c));
+  assert.equal(back.tree.title, "B");
+  assert.equal(back.fileName, "b.md");
+  assert.deepEqual(back.selectedPath, [0]);
+
+  const forward = history.redo(captureState(back.tree, back.fileName, nodeAtPath(back.tree, back.selectedPath)));
+  assert.equal(forward.tree.title, "C");
+  assert.equal(history.canRedo(), false);
+});
+
+test("pathToNode / nodeAtPath round-trip", () => {
+  const tree = parseMarkdown("# R\n\n- a\n  - b\n- c\n");
+  const target = tree.children[0].children[0];
+  const path = pathToNode(tree, target);
+  assert.deepEqual(path, [0, 0]);
+  assert.equal(nodeAtPath(tree, path).title, "b");
+  assert.deepEqual(pathToNode(tree, tree), []);
 });
 
 test("selection redraw invalidates native dblclick targets", () => {

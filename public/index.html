@@ -21,20 +21,62 @@
     color: #111;
     user-select: none;
   }
-  .toolbar button, .node-actions button, .modal button, .modal-actions button {
+  .toolbar button, .ctx-menu button, .modal button, .modal-actions button {
     margin: 0; padding: 7px 12px;
     border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
     font: 13px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
     cursor: pointer;
   }
-  .toolbar button:hover, .node-actions button:hover:not(:disabled), .modal button:hover:not(:disabled) {
+  .toolbar button {
+    border-color: transparent; background: transparent;
+  }
+  .toolbar button:hover:not(:disabled), .ctx-menu button:hover:not(:disabled), .modal button:hover:not(:disabled) {
     border-color: #999;
   }
+  .toolbar button:hover:not(:disabled) {
+    border-color: transparent; background: #f3f3f3;
+  }
+  .toolbar button.icon {
+    width: 34px; height: 34px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .toolbar button.icon svg { width: 16px; height: 16px; display: block; }
+  .toolbar button:disabled { opacity: 0.35; cursor: default; }
   .toolbar input[type="file"] { display: none; }
-  .hint {
-    position: fixed; top: 14px; right: 18px; margin: 0; max-width: 42vw; text-align: right;
-    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    color: #999; pointer-events: none;
+  .toolbar .sep {
+    width: 1px; height: 18px; margin: 0 2px; background: #e5e5e5;
+  }
+  #map { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .help {
+    position: fixed; top: 12px; right: 14px; z-index: 2;
+  }
+  .help > button.icon {
+    margin: 0; padding: 0; width: 34px; height: 34px;
+    border: 1px solid transparent; border-radius: 6px; background: transparent; color: #111;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .help > button.icon:hover { background: #f3f3f3; }
+  .help > button.icon svg { width: 16px; height: 16px; display: block; }
+  .help-tip {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    width: max-content; max-width: min(280px, calc(100vw - 28px));
+    margin: 0; padding: 10px 12px;
+    border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #333;
+    box-shadow: 0 10px 28px rgba(0,0,0,.1);
+    font: 13px/1.45 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateY(-2px);
+    transition: opacity .15s, transform .15s, visibility .15s;
+  }
+  .help-tip ul {
+    margin: 0; padding: 0 0 0 1.1em;
+  }
+  .help-tip li { margin: 0; padding: 2px 0; }
+  .help:hover .help-tip,
+  .help:focus-within .help-tip,
+  .help.open .help-tip {
+    opacity: 1; visibility: visible; transform: translateY(0);
   }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
@@ -60,20 +102,23 @@
     background: #fff; color: #111;
     font: inherit;
   }
-  .node-actions {
-    position: fixed; z-index: 4; display: none; gap: 6px; align-items: center;
-    padding: 4px; border: 1px solid #ddd; border-radius: 8px; background: #fff;
-    box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  .ctx-menu {
+    position: fixed; z-index: 4; display: none; min-width: 168px;
+    margin: 0; padding: 4px; border: 1px solid #ddd; border-radius: 10px; background: #fff;
+    box-shadow: 0 10px 28px rgba(0,0,0,.1);
   }
-  .node-actions.show { display: flex; }
-  .node-actions button { padding: 6px 10px; white-space: nowrap; }
-  .node-actions button:disabled { opacity: 0.35; cursor: default; }
-  .node-actions button.danger { color: #b00020; }
-  .node-actions .count {
-    margin: 0 2px 0 4px;
-    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    color: #888; white-space: nowrap;
+  .ctx-menu.show { display: block; }
+  .ctx-menu .sep { height: 1px; margin: 4px 6px; background: #eee; }
+  .ctx-menu button {
+    display: flex; width: 100%; align-items: center; gap: 10px;
+    margin: 0; padding: 9px 12px; border: 0; border-radius: 7px;
+    background: transparent; text-align: left;
   }
+  .ctx-menu button:hover:not(:disabled) { background: #f3f3f3; }
+  .ctx-menu button:disabled { opacity: 0.35; cursor: default; }
+  .ctx-menu button.danger { color: #b00020; }
+  .ctx-menu button svg { width: 16px; height: 16px; flex: 0 0 auto; }
+  .ctx-menu button span { flex: 1 1 auto; }
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 5;
     display: none; align-items: center; justify-content: center;
@@ -115,33 +160,67 @@
   }
   .modal-actions .primary:hover { border-color: #000; background: #222; }
   @media (max-width: 860px) {
-    .hint { display: none; }
     .brand { display: none; }
-    .node-actions { max-width: calc(100vw - 24px); flex-wrap: wrap; }
   }
 </style>
 </head>
 <body>
 <div class="toolbar">
   <span class="brand">mm</span>
-  <button type="button" id="uploadBtn">上传</button>
-  <button type="button" id="downloadBtn">下载</button>
+  <button type="button" class="icon" id="uploadBtn" title="上传 Markdown" aria-label="上传">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+  </button>
+  <button type="button" class="icon" id="downloadBtn" title="下载" aria-label="下载">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+  </button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" class="icon" id="undoBtn" title="撤销 ⌘Z" aria-label="撤销" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a5 5 0 0 1 0 10h-1"/></svg>
+  </button>
+  <button type="button" class="icon" id="redoBtn" title="重做 ⌘⇧Z" aria-label="重做" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a5 5 0 0 0 0 10h1"/></svg>
+  </button>
   <input id="fileInput" type="file" accept=".md,.markdown,text/markdown,text/plain">
 </div>
 <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
-<p class="hint">双击行内编辑 · 选中后就近操作 · 拖入 Markdown 可导入</p>
+<div class="help" id="help">
+  <button type="button" class="icon" id="helpBtn" aria-label="帮助" aria-describedby="helpTip" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+  </button>
+  <div class="help-tip" id="helpTip" role="tooltip">
+    <ul>
+      <li>双击编辑节点</li>
+      <li>右键 / 长按打开菜单</li>
+      <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
+      <li>Tab 加子节点</li>
+      <li>Enter 加同级</li>
+    </ul>
+  </div>
+</div>
 <div class="drop" id="dropHint">松开以导入 Markdown</div>
-<div class="node-actions" id="nodeActions">
-  <button type="button" data-act="rename">重命名</button>
-  <button type="button" data-act="child">子节点</button>
-  <button type="button" data-act="sibling">同级</button>
-  <button type="button" class="danger" data-act="delete">删除</button>
-  <span class="count" id="nodeCount"></span>
+<div class="ctx-menu" id="ctxMenu" role="menu">
+  <button type="button" data-act="rename" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    <span>重命名</span>
+  </button>
+  <button type="button" data-act="child" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v8a2 2 0 0 0 2 2h8"/><path d="M14 9h6v6"/><path d="m20 9-7 7"/></svg>
+    <span>子节点</span>
+  </button>
+  <button type="button" data-act="sibling" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+    <span>同级</span>
+  </button>
+  <div class="sep"></div>
+  <button type="button" class="danger" data-act="delete" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    <span>删除</span>
+  </button>
 </div>
 <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div class="modal">
     <h2 id="confirmTitle">覆盖当前导图？</h2>
-    <p id="confirmText">导入将替换当前内容，且不可撤销。</p>
+    <p id="confirmText">导入将替换当前内容。可之后撤销。</p>
     <div class="modal-actions">
       <button type="button" id="confirmCancel">取消</button>
       <button type="button" class="primary" id="confirmOk">覆盖导入</button>
@@ -166,18 +245,22 @@
 import {
   DOWNLOAD_FORMATS,
   buildDownload,
+  captureState,
   cloneData,
-  countNodes,
+  createHistory,
   createLocalStore,
+  nodeAtPath,
   normalizeDownloadName,
   pageTitleOf,
   parseMarkdown,
+  pathToNode,
   recognizeNodeTap,
   shouldConfirmOverwrite,
   toMarkdown,
-} from "./mm-core.js?v=20261102b";
+} from "./mm-core.js?v=20261102g";
 
 const store = createLocalStore();
+const history = createHistory();
 const DEMO = {
   title: "Markdown Mindmap",
   subtitle: "mm.wenfu.dev",
@@ -196,7 +279,7 @@ const DEMO = {
       open: true,
       children: [
         { title: "双击行内编辑", children: [] },
-        { title: "选中后就近操作", children: [] },
+        { title: "右键或长按出菜单", children: [] },
         { title: "Tab / Enter 快捷键", children: [] },
       ],
     },
@@ -212,16 +295,24 @@ let editInput = null;
 let ignoreBlur = false;
 let lastTap = { node: null, time: 0 };
 let pendingImportFile = null;
+let editBaseline = null;
+let longPressTimer = null;
+let longPressArmed = false;
+let suppressNextTap = false;
 
 const NS = "http://www.w3.org/2000/svg";
+const LONG_PRESS_MS = 520;
 const svg = document.getElementById("map");
 const viewport = document.createElementNS(NS, "g");
 const toastEl = document.getElementById("toast");
 const fileInput = document.getElementById("fileInput");
-const nodeActions = document.getElementById("nodeActions");
-const nodeCount = document.getElementById("nodeCount");
+const ctxMenu = document.getElementById("ctxMenu");
+const undoBtn = document.getElementById("undoBtn");
+const redoBtn = document.getElementById("redoBtn");
 const confirmModal = document.getElementById("confirmModal");
+const confirmTitle = document.getElementById("confirmTitle");
 const confirmText = document.getElementById("confirmText");
+const confirmOk = document.getElementById("confirmOk");
 const downloadModal = document.getElementById("downloadModal");
 const downloadName = document.getElementById("downloadName");
 const downloadFormat = document.getElementById("downloadFormat");
@@ -259,6 +350,54 @@ function saveLocal() {
   store.save(fileName, tree);
 }
 
+function currentSnapshot() {
+  return captureState(tree, fileName, selected);
+}
+
+function pushHistory() {
+  history.push(currentSnapshot());
+  updateHistoryChrome();
+}
+
+function updateHistoryChrome() {
+  undoBtn.disabled = !history.canUndo();
+  redoBtn.disabled = !history.canRedo();
+}
+
+function restoreSnapshot(snapshot) {
+  if (!snapshot) return;
+  if (editing) {
+    editing = false;
+    editInput = null;
+    editBaseline = null;
+  }
+  tree = cloneData(snapshot.tree);
+  fileName = snapshot.fileName || fileName;
+  prepare(tree, true);
+  selected = snapshot.selectedPath ? nodeAtPath(tree, snapshot.selectedPath) : null;
+  document.title = pageTitleOf(tree) + " · mm";
+  svg.setAttribute("aria-label", pageTitleOf(tree));
+  frame();
+  saveLocal();
+  updateHistoryChrome();
+}
+
+function undo() {
+  if (editing) commitEdit(true);
+  if (!history.canUndo()) return;
+  const previous = history.undo(currentSnapshot());
+  restoreSnapshot(previous);
+  toast("已撤销");
+}
+
+function redo() {
+  if (editing) commitEdit(true);
+  if (!history.canRedo()) return;
+  const next = history.redo(currentSnapshot());
+  restoreSnapshot(next);
+  toast("已重做");
+}
+
 function walk(node, depth, visit) {
   visit(node, depth);
   node.children.forEach((child) => walk(child, depth + 1, visit));
@@ -286,20 +425,17 @@ function locate(target, node = tree, parent = null, index = -1) {
 }
 
 function updateChrome() {
+  updateHistoryChrome();
+  updateCtxMenuChrome();
+}
+
+function updateCtxMenuChrome() {
   const has = !!selected && !editing;
   const isRoot = selected === tree;
-  nodeActions.querySelector('[data-act="rename"]').disabled = !has;
-  nodeActions.querySelector('[data-act="child"]').disabled = !has;
-  nodeActions.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
-  nodeActions.querySelector('[data-act="delete"]').disabled = !has || isRoot;
-  if (selected) {
-    const total = countNodes(selected);
-    const kids = selected.children.length;
-    nodeCount.textContent = kids ? `${kids} 支 · ${total} 点` : "叶子";
-  } else {
-    nodeCount.textContent = "";
-  }
-  positionNodeActions();
+  ctxMenu.querySelector('[data-act="rename"]').disabled = !has;
+  ctxMenu.querySelector('[data-act="child"]').disabled = !has;
+  ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
+  ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
 }
 
 function selectNode(node) {
@@ -362,26 +498,53 @@ function screenPoint(x, y) {
   return { x: tx + x * scale, y: ty + y * scale };
 }
 
-function positionNodeActions() {
-  if (!selected || editing || selected.x == null || drag?.moved) {
-    nodeActions.classList.remove("show");
-    return;
+function hideCtxMenu() {
+  ctxMenu.classList.remove("show");
+}
+
+function isSecondaryPointer(event) {
+  return event.button === 2 || (event.button === 0 && event.ctrlKey);
+}
+
+function showCtxMenu(clientX, clientY, node) {
+  if (!node || editing) return;
+  clearLongPress();
+  if (selected !== node) {
+    selected = node;
+    lastTap = { node: null, time: 0 };
+    draw();
+  } else {
+    updateChrome();
   }
-  const anchorX = selected.x + Math.max(selected.labelW, 48) + 24;
-  const anchorY = selected.y + selected.h / 2;
-  const pt = screenPoint(anchorX, anchorY);
-  nodeActions.classList.add("show");
+  updateCtxMenuChrome();
+  ctxMenu.classList.add("show");
   const pad = 8;
-  const width = nodeActions.offsetWidth || 280;
-  const height = nodeActions.offsetHeight || 40;
-  let left = pt.x;
-  let top = pt.y - height / 2;
-  if (left + width > window.innerWidth - pad) left = Math.max(pad, pt.x - width - 24 * scale);
+  const width = ctxMenu.offsetWidth || 180;
+  const height = ctxMenu.offsetHeight || 180;
+  let left = clientX;
+  let top = clientY;
+  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
+  if (top + height > window.innerHeight - pad) top = window.innerHeight - height - pad;
   if (left < pad) left = pad;
   if (top < pad) top = pad;
-  if (top + height > window.innerHeight - pad) top = window.innerHeight - height - pad;
-  nodeActions.style.left = `${left}px`;
-  nodeActions.style.top = `${top}px`;
+  ctxMenu.style.left = `${left}px`;
+  ctxMenu.style.top = `${top}px`;
+}
+
+function nodeFromEventTarget(target) {
+  const host = target && target.closest && target.closest("[data-node-path]");
+  if (!host) return null;
+  const raw = host.getAttribute("data-node-path");
+  if (raw === "") return tree;
+  return nodeAtPath(tree, raw.split(",").map(Number));
+}
+
+function clearLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  longPressArmed = false;
 }
 
 function draw() {
@@ -416,6 +579,8 @@ function draw() {
 
     const group = document.createElementNS(NS, "g");
     group.style.cursor = "pointer";
+    const nodePath = pathToNode(tree, node);
+    group.setAttribute("data-node-path", nodePath ? nodePath.join(",") : "");
     const isEditingNode = editing && node === selected;
 
     if (node === selected || isEditingNode) {
@@ -549,6 +714,7 @@ function draw() {
         markHit.style.cursor = "pointer";
         markHit.addEventListener("pointerdown", (event) => {
           event.stopPropagation();
+          if (isSecondaryPointer(event)) return;
           armDrag(event, node, "toggle");
         });
         group.appendChild(markHit);
@@ -558,7 +724,24 @@ function draw() {
     if (!isEditingNode) {
       group.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
+        if (isSecondaryPointer(event)) return;
         armDrag(event, node, "select");
+        if (event.pointerType === "touch") {
+          clearLongPress();
+          longPressArmed = true;
+          const x = event.clientX;
+          const y = event.clientY;
+          longPressTimer = setTimeout(() => {
+            if (!longPressArmed || (drag && drag.moved)) return;
+            longPressArmed = false;
+            longPressTimer = null;
+            suppressNextTap = true;
+            drag = null;
+            svg.classList.remove("dragging");
+            try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
+            showCtxMenu(x, y, node);
+          }, LONG_PRESS_MS);
+        }
       });
     }
     nodes.appendChild(group);
@@ -571,7 +754,6 @@ function draw() {
 
 function apply() {
   viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + scale + ")");
-  positionNodeActions();
 }
 
 function relayout(anchor) {
@@ -585,11 +767,15 @@ function relayout(anchor) {
 let drag = null;
 function armDrag(event, node, mode) {
   if (editing) return;
-  drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node, mode };
+  if (isSecondaryPointer(event)) return;
+  hideCtxMenu();
+  drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node, mode, pointerId: event.pointerId };
   svg.setPointerCapture(event.pointerId);
 }
 svg.addEventListener("pointerdown", (event) => {
   if (editing) return;
+  if (isSecondaryPointer(event)) return;
+  if (!event.target.closest || !event.target.closest("[data-node-path]")) hideCtxMenu();
   armDrag(event, null, "pan");
 });
 svg.addEventListener("pointermove", (event) => {
@@ -598,16 +784,25 @@ svg.addEventListener("pointermove", (event) => {
   const dy = event.clientY - drag.y;
   if (!drag.moved && Math.hypot(dx, dy) < 5) return;
   drag.moved = true;
+  clearLongPress();
+  hideCtxMenu();
   svg.classList.add("dragging");
-  nodeActions.classList.remove("show");
   tx = drag.tx + dx;
   ty = drag.ty + dy;
   apply();
 });
 function endDrag() {
+  clearLongPress();
+  if (suppressNextTap) {
+    suppressNextTap = false;
+    drag = null;
+    svg.classList.remove("dragging");
+    return;
+  }
   if (drag && !drag.moved && drag.node) {
     if (drag.mode === "toggle") {
       lastTap = { node: null, time: 0 };
+      hideCtxMenu();
       drag.node.open = !drag.node.open;
       selected = drag.node;
       relayout(drag.node);
@@ -616,6 +811,7 @@ function endDrag() {
       const result = recognizeNodeTap(lastTap, drag.node, Date.now());
       lastTap = result.next;
       if (result.action === "edit") {
+        hideCtxMenu();
         beginEdit(drag.node);
       } else {
         selected = drag.node;
@@ -625,15 +821,27 @@ function endDrag() {
   } else if (drag && !drag.moved && !drag.node) {
     lastTap = { node: null, time: 0 };
     selected = null;
+    hideCtxMenu();
     draw();
-  } else if (drag && drag.moved) {
-    positionNodeActions();
   }
   drag = null;
   svg.classList.remove("dragging");
 }
 svg.addEventListener("pointerup", endDrag);
-svg.addEventListener("pointercancel", () => { drag = null; svg.classList.remove("dragging"); });
+svg.addEventListener("pointercancel", () => {
+  clearLongPress();
+  drag = null;
+  svg.classList.remove("dragging");
+});
+svg.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+  const node = nodeFromEventTarget(event.target);
+  if (!node) {
+    hideCtxMenu();
+    return;
+  }
+  showCtxMenu(event.clientX, event.clientY, node);
+});
 svg.addEventListener("wheel", (event) => {
   if (editing) return;
   event.preventDefault();
@@ -685,6 +893,7 @@ function frame() {
 
 function beginEdit(node) {
   if (!node) return;
+  hideCtxMenu();
   if (editing && selected === node) {
     editInput && editInput.focus();
     return;
@@ -693,6 +902,7 @@ function beginEdit(node) {
   selected = node;
   editing = true;
   editInput = null;
+  editBaseline = currentSnapshot();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -702,24 +912,35 @@ function commitEdit(save) {
   if (!editing) return;
   const node = selected;
   const value = editInput ? editInput.value.replace(/\s+/g, " ").trim() : (node && node.title);
+  const nextTitle = value || "未命名";
+  const baselineNode = editBaseline
+    ? (editBaseline.selectedPath && editBaseline.selectedPath.length
+      ? nodeAtPath(editBaseline.tree, editBaseline.selectedPath)
+      : editBaseline.tree)
+    : null;
+  const changed = !!(save && node && baselineNode && nextTitle !== baselineNode.title);
   ignoreBlur = true;
   editing = false;
   editInput = null;
   if (save && node) {
-    node.title = value || "未命名";
+    if (changed && editBaseline) history.push(editBaseline);
+    node.title = nextTitle;
     if (node === tree) {
       document.title = pageTitleOf(tree) + " · mm";
       svg.setAttribute("aria-label", pageTitleOf(tree));
     }
   }
+  editBaseline = null;
   relayout(node);
   saveLocal();
+  updateHistoryChrome();
   requestAnimationFrame(() => { ignoreBlur = false; });
 }
 
 function addChild(parent) {
   if (!parent) return;
   if (editing) commitEdit(true);
+  pushHistory();
   const child = { title: "新节点", children: [], open: true, depth: (parent.depth || 0) + 1 };
   parent.children.push(child);
   parent.open = true;
@@ -727,6 +948,7 @@ function addChild(parent) {
   selected = child;
   editing = true;
   editInput = null;
+  editBaseline = currentSnapshot();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -737,12 +959,14 @@ function addSibling(node) {
   const info = locate(node);
   if (!info || !info.parent) return;
   if (editing) commitEdit(true);
+  pushHistory();
   const sibling = { title: "新节点", children: [], open: true };
   info.parent.children.splice(info.index + 1, 0, sibling);
   refreshDepth(tree, 0);
   selected = sibling;
   editing = true;
   editInput = null;
+  editBaseline = currentSnapshot();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -755,7 +979,9 @@ function deleteNode(node) {
     toast("不能删除中心节点");
     return;
   }
-  if (editing) commitEdit(false);
+  if (editing) commitEdit(true);
+  hideCtxMenu();
+  pushHistory();
   const parent = info.parent;
   parent.children.splice(info.index, 1);
   refreshDepth(tree, 0);
@@ -764,28 +990,25 @@ function deleteNode(node) {
   saveLocal();
 }
 
-function armAction(btn, action) {
-  btn.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    ignoreBlur = true;
-  });
-  btn.addEventListener("click", (event) => {
-    event.stopPropagation();
-    action();
-    requestAnimationFrame(() => { ignoreBlur = false; });
-  });
-}
-
-nodeActions.querySelectorAll("button[data-act]").forEach((btn) => {
-  const act = btn.getAttribute("data-act");
-  armAction(btn, () => {
-    if (act === "rename") beginEdit(selected);
-    if (act === "child") addChild(selected);
-    if (act === "sibling") addSibling(selected);
-    if (act === "delete") deleteNode(selected);
-  });
+ctxMenu.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+  ignoreBlur = true;
 });
+ctxMenu.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-act]");
+  if (!btn || btn.disabled) return;
+  event.stopPropagation();
+  const act = btn.getAttribute("data-act");
+  hideCtxMenu();
+  if (act === "rename") beginEdit(selected);
+  if (act === "child") addChild(selected);
+  if (act === "sibling") addSibling(selected);
+  if (act === "delete") deleteNode(selected);
+  requestAnimationFrame(() => { ignoreBlur = false; });
+});
+
+undoBtn.addEventListener("click", undo);
+redoBtn.addEventListener("click", redo);
 
 window.addEventListener("keydown", (event) => {
   if (confirmModal.classList.contains("show") || downloadModal.classList.contains("show")) {
@@ -796,10 +1019,22 @@ window.addEventListener("keydown", (event) => {
     }
     return;
   }
+  const mod = event.metaKey || event.ctrlKey;
+  if (mod && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    if (event.shiftKey) redo();
+    else undo();
+    return;
+  }
+  if (mod && event.key.toLowerCase() === "y") {
+    event.preventDefault();
+    redo();
+    return;
+  }
   if (editing) return;
   const tag = event.target && event.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable) return;
-  if (!selected) return;
+  if (!selected && event.key !== "Escape") return;
   if (event.key === "Tab") {
     event.preventDefault();
     addChild(selected);
@@ -814,16 +1049,19 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     deleteNode(selected);
   } else if (event.key === "Escape") {
+    hideCtxMenu();
     selected = null;
     draw();
   }
 });
 
-function loadTree(next, name, keepOpen) {
+function loadTree(next, name, keepOpen, { recordHistory = false } = {}) {
   if (editing) {
     editing = false;
     editInput = null;
+    editBaseline = null;
   }
+  if (recordHistory) pushHistory();
   tree = next;
   selected = null;
   if (name) fileName = name.replace(/\.markdown$/i, ".md");
@@ -833,11 +1071,14 @@ function loadTree(next, name, keepOpen) {
   svg.setAttribute("aria-label", title);
   frame();
   saveLocal();
+  updateHistoryChrome();
 }
 
 function openConfirm(file) {
   pendingImportFile = file;
-  confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图，且不可撤销。`;
+  confirmTitle.textContent = "覆盖当前导图？";
+  confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图。可之后撤销。`;
+  confirmOk.textContent = "覆盖导入";
   confirmModal.classList.add("show");
 }
 
@@ -851,7 +1092,7 @@ function closeConfirm(confirmed) {
 async function doImport(file) {
   try {
     const text = await file.text();
-    loadTree(parseMarkdown(text), file.name || "outline.md", false);
+    loadTree(parseMarkdown(text), file.name || "outline.md", false, { recordHistory: true });
     toast("已导入 " + (file.name || "Markdown"));
   } catch (error) {
     toast(error.message || String(error));
@@ -902,6 +1143,24 @@ function confirmDownload() {
 
 document.getElementById("uploadBtn").addEventListener("click", () => fileInput.click());
 document.getElementById("downloadBtn").addEventListener("click", openDownload);
+const help = document.getElementById("help");
+const helpBtn = document.getElementById("helpBtn");
+function setHelpOpen(open) {
+  help.classList.toggle("open", open);
+  helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+helpBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setHelpOpen(!help.classList.contains("open"));
+});
+window.addEventListener("pointerdown", (event) => {
+  if (!help.classList.contains("open")) return;
+  if (help.contains(event.target)) return;
+  setHelpOpen(false);
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && help.classList.contains("open")) setHelpOpen(false);
+}, true);
 document.getElementById("confirmCancel").addEventListener("click", () => closeConfirm(false));
 document.getElementById("confirmOk").addEventListener("click", () => closeConfirm(true));
 document.getElementById("downloadCancel").addEventListener("click", closeDownload);
@@ -957,9 +1216,15 @@ if (cached) {
   prepare(tree, true);
 }
 frame();
+window.addEventListener("pointerdown", (event) => {
+  if (!ctxMenu.classList.contains("show")) return;
+  if (ctxMenu.contains(event.target)) return;
+  hideCtxMenu();
+});
+
 window.addEventListener("resize", () => {
+  hideCtxMenu();
   if (!editing) frame();
-  else positionNodeActions();
 });
 
 window.__mm = {
@@ -970,6 +1235,10 @@ window.__mm = {
   getTree: () => tree,
   getSelected: () => selected,
   isEditing: () => editing,
+  canUndo: () => history.canUndo(),
+  canRedo: () => history.canRedo(),
+  undo,
+  redo,
   beginEdit: (node) => beginEdit(node || selected),
   doubleTap: (node) => {
     const target = node || selected || tree;
