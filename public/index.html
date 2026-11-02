@@ -73,6 +73,50 @@
     margin: 0; padding: 0 0 0 1.1em;
   }
   .help-tip li { margin: 0; padding: 2px 0; }
+  .note-pop {
+    position: fixed; z-index: 4;
+    display: none; width: min(320px, calc(100vw - 24px));
+    margin: 0; padding: 0;
+    border: 1px solid #ddd; border-radius: 10px; background: #fff; color: #222;
+    box-shadow: 0 10px 28px rgba(0,0,0,.12);
+    overflow: hidden;
+  }
+  .note-pop.show { display: block; }
+  .note-pop .note-view {
+    margin: 0; padding: 12px 14px;
+    min-height: 72px; max-height: 240px; overflow: auto;
+    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    white-space: pre-wrap; word-break: break-word;
+    color: #333; cursor: text;
+  }
+  .note-pop .note-view:empty::before {
+    content: "暂无备注，双击或长按编辑";
+    color: #aaa;
+  }
+  .note-pop .note-edit {
+    display: none; width: 100%; box-sizing: border-box;
+    margin: 0; padding: 12px 14px; border: 0; outline: none; resize: vertical;
+    min-height: 120px; max-height: 280px;
+    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #222; background: #fff;
+  }
+  .note-pop.editing .note-view { display: none; }
+  .note-pop.editing .note-edit { display: block; }
+  .note-pop .note-foot {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 8px 10px; border-top: 1px solid #eee; background: #fafafa;
+  }
+  .note-pop .note-foot button {
+    margin: 0; padding: 6px 10px;
+    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    cursor: pointer;
+  }
+  .note-pop .note-foot button.primary {
+    border-color: #111; background: #111; color: #fff;
+  }
+  .note-pop .note-foot button:hover { border-color: #999; }
+  .note-pop .note-foot button.primary:hover { border-color: #000; background: #222; }
   .help:hover .help-tip,
   .help:focus-within .help-tip,
   .help.open .help-tip {
@@ -189,8 +233,10 @@
   </button>
   <div class="help-tip" id="helpTip" role="tooltip">
     <ul>
-      <li>双击编辑节点</li>
+      <li>双击编辑标题</li>
       <li>右键 / 长按打开菜单</li>
+      <li>菜单可设副标题（Markdown：标题 :: 副标题）</li>
+      <li>点击便签图标查看备注；双击或长按内容编辑</li>
       <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
       <li>Tab 加子节点</li>
       <li>Enter 加同级</li>
@@ -202,6 +248,14 @@
   <button type="button" data-act="rename" role="menuitem">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
     <span>重命名</span>
+  </button>
+  <button type="button" data-act="subtitle" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/></svg>
+    <span>副标题</span>
+  </button>
+  <button type="button" data-act="note" role="menuitem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg>
+    <span>备注</span>
   </button>
   <button type="button" data-act="child" role="menuitem">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v8a2 2 0 0 0 2 2h8"/><path d="M14 9h6v6"/><path d="m20 9-7 7"/></svg>
@@ -216,6 +270,14 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     <span>删除</span>
   </button>
+</div>
+<div class="note-pop" id="notePop" role="dialog" aria-label="备注">
+  <div class="note-view" id="noteView"></div>
+  <textarea class="note-edit" id="noteEdit" autocomplete="off" spellcheck="true" placeholder="输入备注…"></textarea>
+  <div class="note-foot" id="noteFoot" hidden>
+    <button type="button" id="noteCancel">取消</button>
+    <button type="button" class="primary" id="noteSave">保存</button>
+  </div>
 </div>
 <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div class="modal">
@@ -257,7 +319,7 @@ import {
   recognizeNodeTap,
   shouldConfirmOverwrite,
   toMarkdown,
-} from "./mm-core.js?v=20261102g";
+} from "./mm-core.js?v=20261102i";
 
 const store = createLocalStore();
 const history = createHistory();
@@ -276,10 +338,16 @@ const DEMO = {
     },
     {
       title: "编辑节点",
+      subtitle: "标题与副标题",
       open: true,
       children: [
         { title: "双击行内编辑", children: [] },
-        { title: "右键或长按出菜单", children: [] },
+        {
+          title: "右键设副标题",
+          subtitle: "导出为 标题 :: 副标题",
+          note: "也可用菜单添加备注；导出为引用块 >",
+          children: [],
+        },
         { title: "Tab / Enter 快捷键", children: [] },
       ],
     },
@@ -291,6 +359,7 @@ let tree = null;
 let fileName = "mindmap.md";
 let selected = null;
 let editing = false;
+let editField = "title";
 let editInput = null;
 let ignoreBlur = false;
 let lastTap = { node: null, time: 0 };
@@ -299,6 +368,11 @@ let editBaseline = null;
 let longPressTimer = null;
 let longPressArmed = false;
 let suppressNextTap = false;
+let noteNode = null;
+let noteEditing = false;
+let noteBaseline = null;
+let noteLongPressTimer = null;
+let noteLastTap = { time: 0 };
 
 const NS = "http://www.w3.org/2000/svg";
 const LONG_PRESS_MS = 520;
@@ -316,10 +390,17 @@ const confirmOk = document.getElementById("confirmOk");
 const downloadModal = document.getElementById("downloadModal");
 const downloadName = document.getElementById("downloadName");
 const downloadFormat = document.getElementById("downloadFormat");
+const notePop = document.getElementById("notePop");
+const noteView = document.getElementById("noteView");
+const noteEdit = document.getElementById("noteEdit");
+const noteFoot = document.getElementById("noteFoot");
 svg.appendChild(viewport);
 
 const GAP_X = 56;
 const GAP_Y = 18;
+const SUBTITLE_SIZE = 13;
+const SUBTITLE_GAP = 4;
+const NOTE_ICON_W = 22;
 const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
 const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
 const styles = [
@@ -329,6 +410,24 @@ const styles = [
   { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
   { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
 ];
+
+function subtitleText(node) {
+  return node && node.subtitle ? String(node.subtitle).trim() : "";
+}
+
+function nodeShowsSubtitle(node) {
+  if (!node) return false;
+  if (subtitleText(node)) return true;
+  return editing && selected === node && editField === "subtitle";
+}
+
+function noteText(node) {
+  return node && node.note != null ? String(node.note) : "";
+}
+
+function nodeHasNote(node) {
+  return !!(node && String(node.note || "").trim());
+}
 
 DOWNLOAD_FORMATS.forEach((format) => {
   const option = document.createElement("option");
@@ -433,6 +532,8 @@ function updateCtxMenuChrome() {
   const has = !!selected && !editing;
   const isRoot = selected === tree;
   ctxMenu.querySelector('[data-act="rename"]').disabled = !has;
+  ctxMenu.querySelector('[data-act="subtitle"]').disabled = !has;
+  ctxMenu.querySelector('[data-act="note"]').disabled = !has;
   ctxMenu.querySelector('[data-act="child"]').disabled = !has;
   ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
   ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
@@ -454,15 +555,27 @@ function textWidth(text, font) {
 function layout(node) {
   const depth = Math.min(node.depth, styles.length - 1);
   node.style = styles[depth];
-  node.h = node.style.h;
-  const title = editing && node === selected && editInput
+  const editingHere = editing && node === selected && editInput;
+  const title = editingHere && editField === "title"
     ? (editInput.value || " ")
     : (node.title || " ");
+  const subtitle = editingHere && editField === "subtitle"
+    ? (editInput.value || "")
+    : subtitleText(node);
+  const showSub = !!(subtitle || (editingHere && editField === "subtitle"));
   node.labelW = textWidth(title, node.style.weight + " " + node.style.size + "px " + node.style.family);
+  if (showSub) {
+    const subW = textWidth(subtitle || " ", "400 " + SUBTITLE_SIZE + "px " + sans);
+    node.labelW = Math.max(node.labelW, subW);
+    node.h = node.style.h + SUBTITLE_SIZE + SUBTITLE_GAP;
+  } else {
+    node.h = node.style.h;
+  }
   node.hasChildren = node.children.length > 0;
   node.marker = node.hasChildren && !node.open ? node.children.length : 0;
   node.markerW = node.hasChildren ? 24 + (node.marker ? textWidth(String(node.marker), "400 13px " + sans) + 8 : 0) : 0;
-  node.w = node.labelW + node.markerW;
+  node.noteW = nodeHasNote(node) ? NOTE_ICON_W : 0;
+  node.w = node.labelW + node.noteW + node.markerW;
   if (!node.open || !node.hasChildren) {
     node.subtreeH = node.h;
     return;
@@ -502,6 +615,120 @@ function hideCtxMenu() {
   ctxMenu.classList.remove("show");
 }
 
+function clearNoteLongPress() {
+  if (noteLongPressTimer) {
+    clearTimeout(noteLongPressTimer);
+    noteLongPressTimer = null;
+  }
+}
+
+function positionNotePop(anchor) {
+  const pad = 8;
+  const width = notePop.offsetWidth || 280;
+  const height = notePop.offsetHeight || 160;
+  let left = anchor.left;
+  let top = anchor.bottom + 8;
+  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
+  if (top + height > window.innerHeight - pad) top = Math.max(pad, anchor.top - height - 8);
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  notePop.style.left = `${left}px`;
+  notePop.style.top = `${top}px`;
+}
+
+function noteAnchorRect() {
+  if (!noteNode || !noteNode.style) {
+    return { left: window.innerWidth / 2 - 140, top: 80, bottom: 100 };
+  }
+  const x = noteNode.x + noteNode.labelW + 4;
+  const y = noteNode.y + noteNode.h / 2;
+  const pt = screenPoint(x, y);
+  return { left: pt.x, top: pt.y - 10, bottom: pt.y + 10 };
+}
+
+function syncNotePopContent() {
+  const text = noteText(noteNode);
+  noteView.textContent = text;
+  noteEdit.value = text;
+  notePop.classList.toggle("editing", noteEditing);
+  noteFoot.hidden = !noteEditing;
+}
+
+function openNote(node, { edit = false, clientX, clientY } = {}) {
+  if (!node) return;
+  if (editing) commitEdit(true);
+  hideCtxMenu();
+  if (noteNode && noteNode !== node && noteEditing) commitNote(true);
+  selected = node;
+  noteNode = node;
+  noteEditing = !!edit;
+  noteBaseline = noteEditing ? currentSnapshot() : null;
+  noteLastTap = { time: 0 };
+  syncNotePopContent();
+  notePop.classList.add("show");
+  const anchor = clientX != null
+    ? { left: clientX, top: clientY, bottom: clientY }
+    : noteAnchorRect();
+  positionNotePop(anchor);
+  updateChrome();
+  draw();
+  if (noteEditing) {
+    requestAnimationFrame(() => {
+      noteEdit.focus();
+      noteEdit.setSelectionRange(noteEdit.value.length, noteEdit.value.length);
+    });
+  }
+}
+
+function beginNoteEdit() {
+  if (!noteNode || noteEditing) return;
+  noteEditing = true;
+  noteBaseline = currentSnapshot();
+  syncNotePopContent();
+  positionNotePop(noteAnchorRect());
+  requestAnimationFrame(() => {
+    noteEdit.focus();
+    noteEdit.select();
+  });
+}
+
+function commitNote(save) {
+  if (!noteNode) {
+    hideNotePop();
+    return;
+  }
+  const node = noteNode;
+  const normalized = noteEdit.value.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").replace(/^\n+|\n+$/g, "");
+  const prev = noteText(node);
+  const changed = save && normalized !== prev;
+  if (save && changed) {
+    if (noteBaseline) history.push(noteBaseline);
+    if (normalized) node.note = normalized;
+    else delete node.note;
+  }
+  noteEditing = false;
+  noteBaseline = null;
+  noteNode = null;
+  notePop.classList.remove("show", "editing");
+  noteFoot.hidden = true;
+  relayout(node);
+  saveLocal();
+  updateHistoryChrome();
+}
+
+function hideNotePop({ save = true } = {}) {
+  if (!notePop.classList.contains("show")) return;
+  if (noteEditing && save) {
+    commitNote(true);
+    return;
+  }
+  noteEditing = false;
+  noteBaseline = null;
+  noteNode = null;
+  notePop.classList.remove("show", "editing");
+  noteFoot.hidden = true;
+}
+
 function isSecondaryPointer(event) {
   return event.button === 2 || (event.button === 0 && event.ctrlKey);
 }
@@ -509,6 +736,7 @@ function isSecondaryPointer(event) {
 function showCtxMenu(clientX, clientY, node) {
   if (!node || editing) return;
   clearLongPress();
+  hideNotePop({ save: true });
   if (selected !== node) {
     selected = node;
     lastTap = { node: null, time: 0 };
@@ -582,6 +810,11 @@ function draw() {
     const nodePath = pathToNode(tree, node);
     group.setAttribute("data-node-path", nodePath ? nodePath.join(",") : "");
     const isEditingNode = editing && node === selected;
+    const showSub = nodeShowsSubtitle(node);
+    const contentH = showSub ? node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE : node.style.size;
+    const contentTop = node.y + (node.h - contentH) / 2;
+    const titleY = contentTop + node.style.size / 2;
+    const subY = contentTop + node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE / 2;
 
     if (node === selected || isEditingNode) {
       const sel = document.createElementNS(NS, "rect");
@@ -605,7 +838,7 @@ function draw() {
 
       const label = document.createElementNS(NS, "text");
       label.setAttribute("x", node.x);
-      label.setAttribute("y", node.y + node.h / 2);
+      label.setAttribute("y", titleY);
       label.setAttribute("dominant-baseline", "central");
       label.setAttribute("fill", node.style.fill);
       label.setAttribute("font-family", node.style.family);
@@ -613,63 +846,169 @@ function draw() {
       label.setAttribute("font-weight", node.style.weight);
       label.textContent = node.title;
       group.appendChild(label);
+
+      if (showSub) {
+        const sub = document.createElementNS(NS, "text");
+        sub.setAttribute("x", node.x);
+        sub.setAttribute("y", subY);
+        sub.setAttribute("dominant-baseline", "central");
+        sub.setAttribute("fill", "#888");
+        sub.setAttribute("font-family", sans);
+        sub.setAttribute("font-size", SUBTITLE_SIZE);
+        sub.setAttribute("font-weight", 400);
+        sub.textContent = subtitleText(node);
+        group.appendChild(sub);
+      }
     } else {
-      const fo = document.createElementNS(NS, "foreignObject");
       const editW = Math.max(node.labelW + 28, 72);
-      fo.setAttribute("x", node.x - 6);
-      fo.setAttribute("y", node.y + 4);
-      fo.setAttribute("width", editW);
-      fo.setAttribute("height", node.h - 8);
-      const input = document.createElement("input");
-      input.className = "inline-edit";
-      input.type = "text";
-      input.autocomplete = "off";
-      input.spellcheck = false;
-      input.value = activeValue != null ? activeValue : node.title;
-      input.style.fontFamily = node.style.family;
-      input.style.fontSize = node.style.size + "px";
-      input.style.fontWeight = node.style.weight;
-      fo.appendChild(input);
-      group.appendChild(fo);
-      editInput = input;
+      const editingTitle = editField === "title";
+      const editingSub = editField === "subtitle";
 
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitEdit(true);
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          commitEdit(false);
-        } else if (event.key === "Tab") {
-          event.preventDefault();
-          commitEdit(true);
-          addChild(selected);
-        }
-      });
-      input.addEventListener("input", () => {
-        const value = input.value || " ";
-        node.labelW = textWidth(value, node.style.weight + " " + node.style.size + "px " + node.style.family);
-        fo.setAttribute("width", Math.max(node.labelW + 28, 72));
-      });
-      input.addEventListener("blur", () => {
-        if (ignoreBlur) return;
-        commitEdit(true);
-      });
+      if (editingTitle) {
+        const fo = document.createElementNS(NS, "foreignObject");
+        fo.setAttribute("x", node.x - 6);
+        fo.setAttribute("y", contentTop - 2);
+        fo.setAttribute("width", editW);
+        fo.setAttribute("height", node.style.size + 8);
+        const input = document.createElement("input");
+        input.className = "inline-edit";
+        input.type = "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.value = activeValue != null ? activeValue : node.title;
+        input.style.fontFamily = node.style.family;
+        input.style.fontSize = node.style.size + "px";
+        input.style.fontWeight = node.style.weight;
+        fo.appendChild(input);
+        group.appendChild(fo);
+        editInput = input;
+      } else {
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", node.x);
+        label.setAttribute("y", titleY);
+        label.setAttribute("dominant-baseline", "central");
+        label.setAttribute("fill", node.style.fill);
+        label.setAttribute("font-family", node.style.family);
+        label.setAttribute("font-size", node.style.size);
+        label.setAttribute("font-weight", node.style.weight);
+        label.textContent = node.title;
+        group.appendChild(label);
+      }
 
-      requestAnimationFrame(() => {
-        if (!editInput) return;
-        editInput.focus();
-        if (selectionStart != null && selectionEnd != null) {
-          try { editInput.setSelectionRange(selectionStart, selectionEnd); }
-          catch (_) { editInput.select(); }
-        } else {
-          editInput.select();
-        }
+      if (editingSub) {
+        const fo = document.createElementNS(NS, "foreignObject");
+        fo.setAttribute("x", node.x - 6);
+        fo.setAttribute("y", contentTop + node.style.size + SUBTITLE_GAP - 2);
+        fo.setAttribute("width", editW);
+        fo.setAttribute("height", SUBTITLE_SIZE + 8);
+        const input = document.createElement("input");
+        input.className = "inline-edit";
+        input.type = "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.placeholder = "副标题";
+        input.value = activeValue != null ? activeValue : subtitleText(node);
+        input.style.fontFamily = sans;
+        input.style.fontSize = SUBTITLE_SIZE + "px";
+        input.style.fontWeight = 400;
+        fo.appendChild(input);
+        group.appendChild(fo);
+        editInput = input;
+      } else if (showSub) {
+        const sub = document.createElementNS(NS, "text");
+        sub.setAttribute("x", node.x);
+        sub.setAttribute("y", subY);
+        sub.setAttribute("dominant-baseline", "central");
+        sub.setAttribute("fill", "#888");
+        sub.setAttribute("font-family", sans);
+        sub.setAttribute("font-size", SUBTITLE_SIZE);
+        sub.setAttribute("font-weight", 400);
+        sub.textContent = subtitleText(node);
+        group.appendChild(sub);
+      }
+
+      if (editInput) {
+        const input = editInput;
+        const fo = input.parentNode;
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitEdit(true);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            commitEdit(false);
+          } else if (event.key === "Tab" && editField === "title") {
+            event.preventDefault();
+            commitEdit(true);
+            addChild(selected);
+          }
+        });
+        input.addEventListener("input", () => {
+          const value = input.value || " ";
+          if (editField === "title") {
+            node.labelW = textWidth(value, node.style.weight + " " + node.style.size + "px " + node.style.family);
+            const subW = subtitleText(node)
+              ? textWidth(subtitleText(node), "400 " + SUBTITLE_SIZE + "px " + sans)
+              : 0;
+            node.labelW = Math.max(node.labelW, subW);
+          } else {
+            const titleW = textWidth(node.title || " ", node.style.weight + " " + node.style.size + "px " + node.style.family);
+            const subW = textWidth(value, "400 " + SUBTITLE_SIZE + "px " + sans);
+            node.labelW = Math.max(titleW, subW);
+          }
+          fo.setAttribute("width", Math.max(node.labelW + 28, 72));
+        });
+        input.addEventListener("blur", () => {
+          if (ignoreBlur) return;
+          commitEdit(true);
+        });
+
+        requestAnimationFrame(() => {
+          if (!editInput) return;
+          editInput.focus();
+          if (selectionStart != null && selectionEnd != null) {
+            try { editInput.setSelectionRange(selectionStart, selectionEnd); }
+            catch (_) { editInput.select(); }
+          } else {
+            editInput.select();
+          }
+        });
+      }
+    }
+
+    if (node.noteW) {
+      const nx = node.x + node.labelW + 11;
+      const ny = node.y + node.h / 2;
+      const noteIcon = document.createElementNS(NS, "g");
+      noteIcon.style.cursor = "pointer";
+      const noteHit = document.createElementNS(NS, "circle");
+      noteHit.setAttribute("cx", nx);
+      noteHit.setAttribute("cy", ny);
+      noteHit.setAttribute("r", 10);
+      noteHit.setAttribute("fill", "transparent");
+      noteIcon.appendChild(noteHit);
+      const paper = document.createElementNS(NS, "path");
+      paper.setAttribute(
+        "d",
+        `M ${nx - 5} ${ny - 6} h 7 l 3 3 v 9 h -10 z M ${nx + 2} ${ny - 6} v 3 h 3`,
+      );
+      paper.setAttribute("fill", noteNode === node && notePop.classList.contains("show") ? "#eee" : "#fff");
+      paper.setAttribute("stroke", "#666");
+      paper.setAttribute("stroke-width", 1.2);
+      paper.setAttribute("stroke-linejoin", "round");
+      noteIcon.appendChild(paper);
+      noteIcon.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        if (isSecondaryPointer(event)) return;
+        event.preventDefault();
+        openNote(node, { edit: false, clientX: event.clientX, clientY: event.clientY });
       });
+      group.appendChild(noteIcon);
     }
 
     if (node.hasChildren) {
-      const mx = node.x + (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + 16;
+      const baseRight = (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + (node.noteW || 0);
+      const mx = node.x + baseRight + 16;
       const my = node.y + node.h / 2;
       const mark = document.createElementNS(NS, "circle");
       mark.setAttribute("cx", mx);
@@ -891,16 +1230,19 @@ function frame() {
   draw();
 }
 
-function beginEdit(node) {
+function beginEdit(node, field = "title") {
   if (!node) return;
   hideCtxMenu();
-  if (editing && selected === node) {
+  hideNotePop({ save: true });
+  const nextField = field === "subtitle" ? "subtitle" : "title";
+  if (editing && selected === node && editField === nextField) {
     editInput && editInput.focus();
     return;
   }
   if (editing) commitEdit(true);
   selected = node;
   editing = true;
+  editField = nextField;
   editInput = null;
   editBaseline = currentSnapshot();
   layout(tree);
@@ -911,20 +1253,35 @@ function beginEdit(node) {
 function commitEdit(save) {
   if (!editing) return;
   const node = selected;
-  const value = editInput ? editInput.value.replace(/\s+/g, " ").trim() : (node && node.title);
-  const nextTitle = value || "未命名";
+  const field = editField;
+  const raw = editInput ? editInput.value.replace(/\s+/g, " ").trim() : "";
   const baselineNode = editBaseline
     ? (editBaseline.selectedPath && editBaseline.selectedPath.length
       ? nodeAtPath(editBaseline.tree, editBaseline.selectedPath)
       : editBaseline.tree)
     : null;
-  const changed = !!(save && node && baselineNode && nextTitle !== baselineNode.title);
+  let changed = false;
+  if (save && node && baselineNode) {
+    if (field === "subtitle") {
+      const prev = baselineNode.subtitle ? String(baselineNode.subtitle).trim() : "";
+      changed = raw !== prev;
+    } else {
+      const nextTitle = raw || "未命名";
+      changed = nextTitle !== baselineNode.title;
+    }
+  }
   ignoreBlur = true;
   editing = false;
   editInput = null;
+  editField = "title";
   if (save && node) {
     if (changed && editBaseline) history.push(editBaseline);
-    node.title = nextTitle;
+    if (field === "subtitle") {
+      if (raw) node.subtitle = raw;
+      else delete node.subtitle;
+    } else {
+      node.title = raw || "未命名";
+    }
     if (node === tree) {
       document.title = pageTitleOf(tree) + " · mm";
       svg.setAttribute("aria-label", pageTitleOf(tree));
@@ -947,6 +1304,7 @@ function addChild(parent) {
   refreshDepth(tree, 0);
   selected = child;
   editing = true;
+  editField = "title";
   editInput = null;
   editBaseline = currentSnapshot();
   layout(tree);
@@ -965,6 +1323,7 @@ function addSibling(node) {
   refreshDepth(tree, 0);
   selected = sibling;
   editing = true;
+  editField = "title";
   editInput = null;
   editBaseline = currentSnapshot();
   layout(tree);
@@ -1000,17 +1359,81 @@ ctxMenu.addEventListener("click", (event) => {
   event.stopPropagation();
   const act = btn.getAttribute("data-act");
   hideCtxMenu();
-  if (act === "rename") beginEdit(selected);
+  if (act === "rename") beginEdit(selected, "title");
+  if (act === "subtitle") beginEdit(selected, "subtitle");
+  if (act === "note") openNote(selected, { edit: true });
   if (act === "child") addChild(selected);
   if (act === "sibling") addSibling(selected);
   if (act === "delete") deleteNode(selected);
   requestAnimationFrame(() => { ignoreBlur = false; });
 });
 
+notePop.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+});
+noteView.addEventListener("pointerdown", (event) => {
+  if (noteEditing || event.button !== 0) return;
+  clearNoteLongPress();
+  const startX = event.clientX;
+  const startY = event.clientY;
+  noteLongPressTimer = setTimeout(() => {
+    noteLongPressTimer = null;
+    beginNoteEdit();
+  }, LONG_PRESS_MS);
+  const onMove = (moveEvent) => {
+    if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) clearNoteLongPress();
+  };
+  const onUp = () => {
+    clearNoteLongPress();
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+});
+noteView.addEventListener("click", (event) => {
+  if (noteEditing) return;
+  const now = Date.now();
+  if (now - noteLastTap.time <= 350) {
+    noteLastTap = { time: 0 };
+    beginNoteEdit();
+    return;
+  }
+  noteLastTap = { time: now };
+});
+document.getElementById("noteSave").addEventListener("click", () => commitNote(true));
+document.getElementById("noteCancel").addEventListener("click", () => {
+  const host = noteNode;
+  noteEditing = false;
+  noteBaseline = null;
+  syncNotePopContent();
+  if (!nodeHasNote(host)) {
+    hideNotePop({ save: false });
+    draw();
+  } else {
+    positionNotePop(noteAnchorRect());
+  }
+});
+noteEdit.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    document.getElementById("noteCancel").click();
+  } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    commitNote(true);
+  }
+});
+
 undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 
 window.addEventListener("keydown", (event) => {
+  if (notePop.classList.contains("show") && event.key === "Escape") {
+    event.preventDefault();
+    if (noteEditing) document.getElementById("noteCancel").click();
+    else hideNotePop({ save: false });
+    return;
+  }
   if (confirmModal.classList.contains("show") || downloadModal.classList.contains("show")) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -1217,13 +1640,16 @@ if (cached) {
 }
 frame();
 window.addEventListener("pointerdown", (event) => {
-  if (!ctxMenu.classList.contains("show")) return;
-  if (ctxMenu.contains(event.target)) return;
-  hideCtxMenu();
+  if (ctxMenu.classList.contains("show") && !ctxMenu.contains(event.target)) hideCtxMenu();
+  if (notePop.classList.contains("show") && !notePop.contains(event.target)) {
+    hideNotePop({ save: true });
+    draw();
+  }
 });
 
 window.addEventListener("resize", () => {
   hideCtxMenu();
+  if (notePop.classList.contains("show")) hideNotePop({ save: true });
   if (!editing) frame();
 });
 

@@ -11,9 +11,11 @@ import {
   countNodes,
   createHistory,
   createLocalStore,
+  formatListLabel,
   nodeAtPath,
   normalizeDownloadName,
   parseMarkdown,
+  parseTitleSubtitle,
   pathToNode,
   recognizeNodeTap,
   shouldConfirmOverwrite,
@@ -58,6 +60,64 @@ test("toMarkdown round-trips with parseMarkdown", () => {
   assert.equal(tree.subtitle, "副标题");
   assert.equal(tree.children.length, 2);
   assert.equal(tree.children[0].children[0].children[0].title, "副驾驶");
+});
+
+test("parseTitleSubtitle splits on first ::", () => {
+  assert.deepEqual(parseTitleSubtitle("主驾驶 :: 人审关键"), { title: "主驾驶", subtitle: "人审关键" });
+  assert.deepEqual(parseTitleSubtitle("只有标题"), { title: "只有标题", subtitle: "" });
+  assert.deepEqual(parseTitleSubtitle("a :: b :: c"), { title: "a", subtitle: "b :: c" });
+  assert.equal(formatListLabel({ title: "主驾驶", subtitle: "人审关键" }), "主驾驶 :: 人审关键");
+});
+
+test("list item subtitle round-trips via ::", () => {
+  const source = `# Root
+## Root sub
+
+- 主驾驶 :: 人审关键
+  - 子项 :: 说明
+- 普通
+`;
+  const tree = parseMarkdown(source);
+  assert.equal(tree.subtitle, "Root sub");
+  assert.equal(tree.children[0].title, "主驾驶");
+  assert.equal(tree.children[0].subtitle, "人审关键");
+  assert.equal(tree.children[0].children[0].subtitle, "说明");
+  assert.equal(tree.children[1].subtitle, undefined);
+
+  const again = parseMarkdown(toMarkdown(tree));
+  assert.equal(again.children[0].subtitle, "人审关键");
+  assert.equal(again.children[0].children[0].title, "子项");
+  assert.equal(again.children[0].children[0].subtitle, "说明");
+  assert.match(toMarkdown(tree), /- 主驾驶 :: 人审关键/);
+});
+
+test("node notes round-trip via blockquotes", () => {
+  const source = `# Root
+## Root sub
+
+> root note
+> line 2
+
+- A :: sub
+  > note A
+  > more
+  - B
+    > note B
+- C
+`;
+  const tree = parseMarkdown(source);
+  assert.equal(tree.note, "root note\nline 2");
+  assert.equal(tree.children[0].note, "note A\nmore");
+  assert.equal(tree.children[0].children[0].note, "note B");
+  assert.equal(tree.children[1].note, undefined);
+
+  const md = toMarkdown(tree);
+  assert.match(md, /^> root note$/m);
+  assert.match(md, /^  > note A$/m);
+  const again = parseMarkdown(md);
+  assert.equal(again.note, "root note\nline 2");
+  assert.equal(again.children[0].note, "note A\nmore");
+  assert.equal(again.children[0].children[0].note, "note B");
 });
 
 test("recognizeNodeTap: first tap selects, second tap within window edits", () => {
@@ -130,6 +190,12 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /LONG_PRESS_MS/);
   assert.match(html, /isSecondaryPointer/);
   assert.match(html, /data-node-path/);
+  assert.match(html, /data-act="subtitle"/);
+  assert.match(html, /beginEdit\(selected, "subtitle"\)/);
+  assert.match(html, /nodeShowsSubtitle/);
+  assert.match(html, /data-act="note"/);
+  assert.match(html, /openNote\(selected/);
+  assert.match(html, /notePop/);
   assert.equal(/requestDelete/.test(html), false);
 });
 

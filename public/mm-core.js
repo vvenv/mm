@@ -15,6 +15,30 @@ export function indentWidth(prefix) {
   return width;
 }
 
+/** Split `title :: subtitle` on the first `::`. Empty title keeps the raw string. */
+export function parseTitleSubtitle(raw) {
+  const text = String(raw || "").trim();
+  const idx = text.indexOf("::");
+  if (idx === -1) return { title: text, subtitle: "" };
+  const title = text.slice(0, idx).trim();
+  const subtitle = text.slice(idx + 2).trim();
+  if (!title) return { title: text, subtitle: "" };
+  return { title, subtitle };
+}
+
+export function formatListLabel(node) {
+  const title = node && node.title != null ? String(node.title) : "";
+  const subtitle = node && node.subtitle ? String(node.subtitle).trim() : "";
+  return subtitle ? `${title} :: ${subtitle}` : title;
+}
+
+function nodeFromTitleLine(raw) {
+  const parts = parseTitleSubtitle(raw);
+  const node = { title: parts.title, children: [] };
+  if (parts.subtitle) node.subtitle = parts.subtitle;
+  return node;
+}
+
 export function parseMarkdown(markdown) {
   const lines = String(markdown).split(/\r?\n/);
   const root = { title: "Mindmap", subtitle: "", children: [] };
@@ -38,10 +62,18 @@ export function parseMarkdown(markdown) {
         continue;
       }
       const indent = (level - 2) * 2;
-      const node = { title, children: [] };
+      const node = nodeFromTitleLine(title);
       while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
       stack[stack.length - 1].node.children.push(node);
       stack.push({ indent, node });
+      continue;
+    }
+
+    const quote = line.match(/^(\s*)>\s?(.*)$/);
+    if (quote) {
+      const host = stack[stack.length - 1].node;
+      const piece = quote[2];
+      host.note = host.note ? `${host.note}\n${piece}` : piece;
       continue;
     }
 
@@ -49,7 +81,7 @@ export function parseMarkdown(markdown) {
     if (!item) continue;
     sawList = true;
     const indent = indentWidth(item[1]);
-    const node = { title: item[2].trim(), children: [] };
+    const node = nodeFromTitleLine(item[2]);
     while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
     stack[stack.length - 1].node.children.push(node);
     stack.push({ indent, node });
@@ -59,12 +91,23 @@ export function parseMarkdown(markdown) {
   return root;
 }
 
+function appendNoteLines(lines, note, prefix) {
+  String(note).split(/\n/).forEach((noteLine) => {
+    lines.push(`${prefix}> ${noteLine}`);
+  });
+}
+
 export function toMarkdown(node) {
   const lines = [`# ${node.title}`];
   if (node.subtitle) lines.push(`## ${node.subtitle}`);
+  if (node.note) {
+    lines.push("");
+    appendNoteLines(lines, node.note, "");
+  }
   lines.push("");
   function walk(item, depth) {
-    lines.push(`${"  ".repeat(depth)}- ${item.title}`);
+    lines.push(`${"  ".repeat(depth)}- ${formatListLabel(item)}`);
+    if (item.note) appendNoteLines(lines, item.note, `${"  ".repeat(depth)}  `);
     item.children.forEach((child) => walk(child, depth + 1));
   }
   node.children.forEach((child) => walk(child, 0));
@@ -75,7 +118,9 @@ export function toMarkdown(node) {
 export function cloneData(node) {
   const out = { title: node.title, children: (node.children || []).map(cloneData) };
   if (node.subtitle) out.subtitle = node.subtitle;
-  if (node.open) out.open = true;
+  if (node.note) out.note = node.note;
+  if (typeof node.open === "boolean") out.open = node.open;
+  else if (node.open) out.open = true;
   return out;
 }
 
