@@ -4,7 +4,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  DOUBLE_TAP_MS,
   EMOJI_CATEGORIES,
   buildDownload,
   captureState,
@@ -34,7 +33,6 @@ import {
   resolveTheme,
   parseTitleSubtitle,
   pathToNode,
-  recognizeNodeTap,
   shouldConfirmOverwrite,
   splitLeadingIcon,
   toMarkdown,
@@ -244,21 +242,6 @@ test("node notes round-trip via blockquotes", () => {
   assert.equal(again.children[0].children[0].note, "note B");
 });
 
-test("recognizeNodeTap: single tap edits title", () => {
-  const node = { title: "A" };
-  const result = recognizeNodeTap(null, node, 1000);
-  assert.equal(result.action, "edit");
-  assert.equal(result.field, "title");
-  assert.equal(result.next.node, null);
-});
-
-test("recognizeNodeTap: single tap edits desc", () => {
-  const node = { title: "A", desc: "s" };
-  const result = recognizeNodeTap(null, node, 1000, DOUBLE_TAP_MS, "desc");
-  assert.equal(result.action, "edit");
-  assert.equal(result.field, "desc");
-});
-
 test("app mode persists as view or edit", () => {
   assert.equal(normalizeAppMode("view"), "view");
   assert.equal(normalizeAppMode("edit"), "edit");
@@ -347,13 +330,17 @@ test("createLocalStore persists and restores tree", () => {
 
 /**
  * Documents why interaction must not rely on native dblclick: selecting
- * redraws SVG and replaces the node element.
+ * redraws SVG and replaces the node element. Editing starts via beginEdit
+ * on a single pointerup (clickEdit / drag.mode select|desc).
  */
-test("index.html wires recognizeNodeTap and does not rely on native dblclick", () => {
+test("index.html edits on single click and does not rely on native dblclick", () => {
   const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
-  assert.match(html, /recognizeNodeTap/);
+  assert.match(html, /beginEdit\(/);
+  assert.match(html, /clickEdit:/);
   assert.match(html, /from "\.\/mm-core\.js(?:\?[^"]*)?"/);
   assert.equal(/addEventListener\(\s*["']dblclick["']/.test(html), false);
+  assert.equal(/recognizeNodeTap/.test(html), false);
+  assert.equal(/DOUBLE_TAP_MS/.test(html), false);
   assert.match(html, /ctx-menu/);
   assert.match(html, /confirmModal/);
   assert.match(html, /downloadModal/);
@@ -504,9 +491,4 @@ test("selection redraw invalidates native dblclick targets", () => {
     { id: "node-1-redrawn", type: "click" },
   ]);
   assert.ok(!events.some((e) => e.type === "dblclick"));
-
-  // app-level recognizer edits on a single logical click
-  const logical = { title: "同一节点" };
-  const result = recognizeNodeTap(null, logical, 1);
-  assert.equal(result.action, "edit");
 });

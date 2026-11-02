@@ -1154,14 +1154,13 @@
         normalizeThemeId,
         readFontId,
         readThemeId,
-        recognizeNodeTap,
         resolveTheme,
         writeAppMode,
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
         toMarkdown,
-      } from "./mm-core.js?v=20261102p";
+      } from "./mm-core.js?v=20261102q";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -2618,18 +2617,7 @@
               selected = drag.node;
               draw();
             } else {
-              const result = recognizeNodeTap(
-                null,
-                drag.node,
-                Date.now(),
-                undefined,
-                field,
-              );
-              if (result.action === "edit") beginEdit(drag.node, field);
-              else {
-                selected = drag.node;
-                draw();
-              }
+              beginEdit(drag.node, field);
             }
           }
         } else if (drag && !drag.moved && !drag.node) {
@@ -3327,7 +3315,6 @@
       });
 
       window.__mm = {
-        recognizeNodeTap,
         shouldConfirmOverwrite,
         normalizeDownloadName,
         buildDownload,
@@ -3350,15 +3337,8 @@
           if (!canEdit()) return "select";
           const target = node || selected || tree;
           const targetField = field === "desc" ? "desc" : "title";
-          const result = recognizeNodeTap(
-            null,
-            target,
-            Date.now(),
-            undefined,
-            targetField,
-          );
-          if (result.action === "edit") beginEdit(target, targetField);
-          return result.action;
+          beginEdit(target, targetField);
+          return "edit";
         },
       };
 

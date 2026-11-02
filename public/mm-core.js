@@ -9,7 +9,6 @@ export const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
 export const MODE_KEY = "mm.wenfu.dev/mode";
 export const FONT_KEY = "mm.wenfu.dev/font";
 export const THEME_KEY = "mm.wenfu.dev/theme";
-export const DOUBLE_TAP_MS = 350;
 
 /** App mode is either read-only (`view`) or editable (`edit`). Unknown values stay editable. */
 export function normalizeAppMode(value) {
@@ -1000,16 +999,6 @@ export function buildDownload(tree, formatId = "markdown", name) {
     return { filename, mime: format.mime, content: toJson(tree) };
   }
   throw new Error(`${format.label} 即将支持`);
-}
-
-/**
- * A click on a node field begins editing. Title and desc are separate targets.
- * Kept so the app does not rely on native `dblclick` (SVG redraw replaces the
- * DOM target after selection).
- */
-export function recognizeNodeTap(prev, node, now = Date.now(), threshold = DOUBLE_TAP_MS, field = "title") {
-  const target = field === "desc" ? "desc" : "title";
-  return { action: "edit", field: target, next: { node: null, field: null, time: 0 } };
 }
 
 export function createLocalStore(storage = globalThis.localStorage, key = STORAGE_KEY) {
