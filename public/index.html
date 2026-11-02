@@ -217,6 +217,42 @@
       .toolbar button:disabled {
         opacity: 0.35;
         cursor: default;
+        pointer-events: none;
+      }
+      .tip {
+        display: inline-flex;
+      }
+      [data-tooltip] {
+        position: relative;
+      }
+      [data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: var(--toast-bg);
+        color: var(--toast-fg);
+        font-size: 12px;
+        line-height: 1.25;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        z-index: 30;
+      }
+      [data-tooltip]:hover::after,
+      [data-tooltip]:focus-within::after {
+        opacity: 1;
+        visibility: visible;
+      }
+      .toolbar-end > [data-tooltip]::after,
+      .toolbar-end .tip[data-tooltip]::after {
+        left: auto;
+        right: 0;
+        transform: none;
       }
       .toolbar input[type="file"] {
         display: none;
@@ -794,116 +830,121 @@
         </button>
       </div>
       <span class="sep" aria-hidden="true"></span>
-      <button
-        type="button"
-        class="icon"
-        id="undoBtn"
-        title="撤销 ⌘Z"
-        aria-label="撤销"
-        disabled
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+      <span class="tip" data-tooltip="撤销 ⌘Z">
+        <button
+          type="button"
+          class="icon"
+          id="undoBtn"
+          aria-label="撤销"
+          disabled
         >
-          <path d="M9 14 4 9l5-5" />
-          <path d="M4 9h10a5 5 0 0 1 0 10h-1" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="icon"
-        id="redoBtn"
-        title="重做 ⌘⇧Z"
-        aria-label="重做"
-        disabled
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10a5 5 0 0 1 0 10h-1" />
+          </svg>
+        </button>
+      </span>
+      <span class="tip" data-tooltip="重做 ⌘⇧Z">
+        <button
+          type="button"
+          class="icon"
+          id="redoBtn"
+          aria-label="重做"
+          disabled
         >
-          <path d="m15 14 5-5-5-5" />
-          <path d="M20 9H10a5 5 0 0 0 0 10h1" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 14 5-5-5-5" />
+            <path d="M20 9H10a5 5 0 0 0 0 10h1" />
+          </svg>
+        </button>
+      </span>
     </div>
     <div class="toolbar toolbar-end">
-      <button
-        type="button"
-        class="icon"
-        id="uploadBtn"
-        title="导入 Markdown"
-        aria-label="导入"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+      <span class="tip" data-tooltip="导入 Markdown">
+        <button
+          type="button"
+          class="icon"
+          id="uploadBtn"
+          aria-label="导入"
         >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m17 8-5-5-5 5" />
-          <path d="M12 3v12" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="icon"
-        id="downloadBtn"
-        title="导出"
-        aria-label="导出"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m17 8-5-5-5 5" />
+            <path d="M12 3v12" />
+          </svg>
+        </button>
+      </span>
+      <span class="tip" data-tooltip="导出">
+        <button
+          type="button"
+          class="icon"
+          id="downloadBtn"
+          aria-label="导出"
         >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m7 10 5 5 5-5" />
-          <path d="M12 15V3" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="icon"
-        id="closeDocBtn"
-        title="关闭文档"
-        aria-label="关闭文档"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m7 10 5 5 5-5" />
+            <path d="M12 15V3" />
+          </svg>
+        </button>
+      </span>
+      <span class="tip" data-tooltip="关闭文档">
+        <button
+          type="button"
+          class="icon"
+          id="closeDocBtn"
+          aria-label="关闭文档"
         >
-          <path
-            d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"
-          />
-          <path d="M15 3v6h6" />
-          <path d="m10 12 4 4" />
-          <path d="m14 12-4 4" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"
+            />
+            <path d="M15 3v6h6" />
+            <path d="m10 12 4 4" />
+            <path d="m14 12-4 4" />
+          </svg>
+        </button>
+      </span>
       <span class="sep" aria-hidden="true"></span>
       <div class="settings" id="settings">
         <button
@@ -935,11 +976,11 @@
           role="dialog"
           aria-label="设置"
         >
-          <label class="settings-row" title="外观主题">
+          <label class="settings-row" data-tooltip="外观主题">
             <span>主题</span>
             <select id="themeSelect" aria-label="外观主题"></select>
           </label>
-          <label class="settings-row" title="全局字体">
+          <label class="settings-row" data-tooltip="全局字体">
             <span>字体</span>
             <select id="fontSelect" aria-label="全局字体"></select>
           </label>
@@ -1438,11 +1479,19 @@
           btn.tabIndex = on ? 0 : -1;
         });
         uploadBtn.disabled = !canEdit();
-        uploadBtn.title = canEdit() ? "导入 Markdown" : "只读模式下不能导入";
+        uploadBtn.parentElement.dataset.tooltip = canEdit()
+          ? "导入 Markdown"
+          : "只读模式下不能导入";
         closeDocBtn.disabled = !canEdit();
-        closeDocBtn.title = canEdit() ? "关闭文档" : "只读模式下不能关闭文档";
-        undoBtn.title = canEdit() ? "撤销 ⌘Z" : "只读模式下不能撤销";
-        redoBtn.title = canEdit() ? "重做 ⌘⇧Z" : "只读模式下不能重做";
+        closeDocBtn.parentElement.dataset.tooltip = canEdit()
+          ? "关闭文档"
+          : "只读模式下不能关闭文档";
+        undoBtn.parentElement.dataset.tooltip = canEdit()
+          ? "撤销 ⌘Z"
+          : "只读模式下不能撤销";
+        redoBtn.parentElement.dataset.tooltip = canEdit()
+          ? "重做 ⌘⇧Z"
+          : "只读模式下不能重做";
       }
 
       function setAppMode(mode) {
