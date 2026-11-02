@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown Mindmap</title>
+<meta name="description" content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、上传下载。">
+<link rel="canonical" href="https://mm.wenfu.dev/">
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  svg.dragging { cursor: grabbing; }
+  .toolbar {
+    position: fixed; top: 12px; left: 14px; z-index: 2;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .brand {
+    margin: 0 6px 0 0;
+    font: 700 15px/1 "Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif;
+    letter-spacing: 0.02em;
+    color: #111;
+    user-select: none;
+  }
+  .toolbar button {
+    margin: 0; padding: 7px 12px;
+    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+    font: 13px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    cursor: pointer;
+  }
+  .toolbar button:hover:not(:disabled) { border-color: #999; }
+  .toolbar button:disabled { opacity: 0.35; cursor: default; }
+  .toolbar input[type="file"] { display: none; }
+  .hint {
+    position: fixed; top: 14px; right: 18px; margin: 0; max-width: 42vw; text-align: right;
+    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #999; pointer-events: none;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    margin: 0; padding: 8px 14px; border-radius: 6px;
+    background: #111; color: #fff;
+    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 5;
+  }
+  .toast.show { opacity: 1; }
+  .drop {
+    position: fixed; inset: 0; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.82);
+    border: 2px dashed #111; box-sizing: border-box;
+    font: 18px/1.4 "Songti SC", "STSongti-SC-Regular", serif;
+    color: #111; pointer-events: none;
+  }
+  body.dragging-file .drop { display: flex; }
+  .inline-edit {
+    display: block; width: 100%; height: 100%;
+    margin: 0; padding: 0 4px; box-sizing: border-box;
+    border: 1.5px solid #111; border-radius: 4px; outline: none;
+    background: #fff; color: #111;
+    font: inherit;
+  }
+  .menu {
+    position: fixed; z-index: 5; display: none; min-width: 148px;
+    margin: 0; padding: 4px; border: 1px solid #ccc; border-radius: 8px;
+    background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  }
+  .menu button {
+    display: block; width: 100%; margin: 0; padding: 8px 12px;
+    border: 0; border-radius: 5px; background: transparent; color: #111;
+    font: 13px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    text-align: left; cursor: pointer;
+  }
+  .menu button:hover { background: #f3f3f3; }
+  .menu button.danger { color: #b00020; }
+  .menu button:disabled { opacity: 0.35; cursor: default; }
+  .menu button:disabled:hover { background: transparent; }
+  .menu .sep { height: 1px; margin: 4px 6px; background: #eee; }
+  @media (max-width: 860px) {
+    .hint { display: none; }
+    .brand { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="brand">mm</span>
+  <button type="button" id="uploadBtn">上传</button>
+  <button type="button" id="downloadBtn">下载</button>
+  <button type="button" id="editBtn" disabled>重命名</button>
+  <button type="button" id="addChildBtn" disabled>子节点</button>
+  <button type="button" id="addSiblingBtn" disabled>同级</button>
+  <button type="button" id="deleteBtn" disabled>删除</button>
+  <input id="fileInput" type="file" accept=".md,.markdown,text/markdown,text/plain">
+</div>
+<svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
+<p class="hint">双击行内编辑 · Tab 子节点 · Enter 同级 · 自动保存到本机</p>
+<div class="drop">松开以导入 Markdown</div>
+<div class="menu" id="menu" role="menu">
+  <button type="button" data-act="rename">重命名</button>
+  <button type="button" data-act="child">添加子节点</button>
+  <button type="button" data-act="sibling">添加同级</button>
+  <div class="sep"></div>
+  <button type="button" class="danger" data-act="delete">删除</button>
+</div>
+<p class="toast" id="toast" role="status"></p>
+<script type="module">
+import {
+  cloneData,
+  createLocalStore,
+  pageTitleOf,
+  parseMarkdown,
+  recognizeNodeTap,
+  toMarkdown,
+} from "./mm-core.js";
+
+const store = createLocalStore();
+const DEMO = {
+  title: "Markdown Mindmap",
+  subtitle: "mm.wenfu.dev",
+  open: true,
+  children: [
+    {
+      title: "上传大纲",
+      open: true,
+      children: [
+        { title: "# 标题 → 中心", children: [] },
+        { title: "嵌套列表 → 分支", children: [] },
+      ],
+    },
+    {
+      title: "编辑节点",
+      open: true,
+      children: [
+        { title: "双击行内编辑", children: [] },
+        { title: "Tab 添加子节点", children: [] },
+        { title: "Enter 添加同级", children: [] },
+      ],
+    },
+    { title: "自动保存到本机", children: [] },
+  ],
+};
+
+let tree = null;
+let fileName = "mindmap.md";
+let selected = null;
+let editing = false;
+let editInput = null;
+let ignoreBlur = false;
+let lastTap = { node: null, time: 0 };
+
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const viewport = document.createElementNS(NS, "g");
+const toastEl = document.getElementById("toast");
+const fileInput = document.getElementById("fileInput");
+const menu = document.getElementById("menu");
+const editBtn = document.getElementById("editBtn");
+const addChildBtn = document.getElementById("addChildBtn");
+const addSiblingBtn = document.getElementById("addSiblingBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+svg.appendChild(viewport);
+
+const GAP_X = 56;
+const GAP_Y = 18;
+const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
+const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
+const styles = [
+  { size: 30, weight: 700, family: song, fill: "#111", h: 46 },
+  { size: 22, weight: 700, family: song, fill: "#111", h: 38 },
+  { size: 17, weight: 600, family: song, fill: "#111", h: 34 },
+  { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
+  { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
+];
+
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
+function saveLocal() {
+  store.save(fileName, tree);
+}
+
+function walk(node, depth, visit) {
+  visit(node, depth);
+  node.children.forEach((child) => walk(child, depth + 1, visit));
+}
+
+function prepare(node, keepOpen) {
+  walk(node, 0, (item, depth) => {
+    item.depth = depth;
+    if (!keepOpen || item.open === undefined) item.open = depth < 2;
+  });
+}
+
+function refreshDepth(node, depth) {
+  node.depth = depth;
+  node.children.forEach((child) => refreshDepth(child, depth + 1));
+}
+
+function locate(target, node = tree, parent = null, index = -1) {
+  if (node === target) return { node, parent, index };
+  for (let i = 0; i < node.children.length; i++) {
+    const found = locate(target, node.children[i], node, i);
+    if (found) return found;
+  }
+  return null;
+}
+
+function updateChrome() {
+  const has = !!selected;
+  const isRoot = selected === tree;
+  editBtn.disabled = !has || editing;
+  addChildBtn.disabled = !has || editing;
+  addSiblingBtn.disabled = !has || isRoot || editing;
+  deleteBtn.disabled = !has || isRoot || editing;
+  menu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
+  menu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
+}
+
+function selectNode(node) {
+  if (editing) commitEdit(true);
+  selected = node || null;
+  hideMenu();
+  updateChrome();
+  draw();
+}
+
+const measureCanvas = document.createElement("canvas").getContext("2d");
+function textWidth(text, font) {
+  measureCanvas.font = font;
+  return Math.ceil(measureCanvas.measureText(text).width);
+}
+
+function layout(node) {
+  const depth = Math.min(node.depth, styles.length - 1);
+  node.style = styles[depth];
+  node.h = node.style.h;
+  const title = editing && node === selected && editInput
+    ? (editInput.value || " ")
+    : (node.title || " ");
+  node.labelW = textWidth(title, node.style.weight + " " + node.style.size + "px " + node.style.family);
+  node.hasChildren = node.children.length > 0;
+  node.marker = node.hasChildren && !node.open ? node.children.length : 0;
+  node.markerW = node.hasChildren ? 24 + (node.marker ? textWidth(String(node.marker), "400 13px " + sans) + 8 : 0) : 0;
+  node.w = node.labelW + node.markerW;
+  if (!node.open || !node.hasChildren) {
+    node.subtreeH = node.h;
+    return;
+  }
+  node.children.forEach(layout);
+  const inner = node.children.reduce((sum, child) => sum + child.subtreeH, 0) + GAP_Y * (node.children.length - 1);
+  node.subtreeH = Math.max(node.h, inner);
+}
+
+function place(node, x, top) {
+  node.x = x;
+  if (!node.open || !node.hasChildren) {
+    node.y = top + (node.subtreeH - node.h) / 2;
+    return;
+  }
+  const inner = node.children.reduce((sum, child) => sum + child.subtreeH, 0) + GAP_Y * (node.children.length - 1);
+  let y = top + (node.subtreeH - inner) / 2;
+  node.children.forEach((child) => {
+    place(child, x + node.w + GAP_X, y);
+    y += child.subtreeH + GAP_Y;
+  });
+  const first = node.children[0];
+  const last = node.children[node.children.length - 1];
+  const mid = (first.y + first.h / 2 + last.y + last.h / 2) / 2;
+  node.y = mid - node.h / 2;
+}
+
+let tx = 48;
+let ty = 36;
+let scale = 1;
+
+function draw() {
+  const activeValue = editing && editInput ? editInput.value : null;
+  const selectionStart = editing && editInput ? editInput.selectionStart : null;
+  const selectionEnd = editing && editInput ? editInput.selectionEnd : null;
+
+  viewport.replaceChildren();
+  const links = document.createElementNS(NS, "g");
+  const nodes = document.createElementNS(NS, "g");
+  viewport.append(links, nodes);
+
+  function visit(node) {
+    if (!node.style) return;
+    if (node.open) {
+      node.children.forEach((child) => {
+        if (!child.style) return;
+        const x1 = node.x + node.w;
+        const y1 = node.y + node.h / 2;
+        const x2 = child.x;
+        const y2 = child.y + child.h / 2;
+        const bend = Math.max(20, (x2 - x1) * 0.46);
+        const path = document.createElementNS(NS, "path");
+        path.setAttribute("d", "M " + x1 + " " + y1 + " C " + (x1 + bend) + " " + y1 + ", " + (x2 - bend) + " " + y2 + ", " + x2 + " " + y2);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#111");
+        path.setAttribute("stroke-width", node.depth === 0 ? 1.6 : 1);
+        links.appendChild(path);
+        visit(child);
+      });
+    }
+
+    const group = document.createElementNS(NS, "g");
+    group.style.cursor = "pointer";
+    const isEditingNode = editing && node === selected;
+
+    if (node === selected || isEditingNode) {
+      const sel = document.createElementNS(NS, "rect");
+      sel.setAttribute("x", node.x - 10);
+      sel.setAttribute("y", node.y + 2);
+      sel.setAttribute("width", Math.max(node.labelW, 48) + 20);
+      sel.setAttribute("height", node.h - 4);
+      sel.setAttribute("rx", 4);
+      sel.setAttribute("fill", "#f0f0f0");
+      group.appendChild(sel);
+    }
+
+    if (!isEditingNode) {
+      const hit = document.createElementNS(NS, "rect");
+      hit.setAttribute("x", node.x - 8);
+      hit.setAttribute("y", node.y);
+      hit.setAttribute("width", Math.max(node.labelW, 12) + 8);
+      hit.setAttribute("height", node.h);
+      hit.setAttribute("fill", "transparent");
+      group.appendChild(hit);
+
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", node.x);
+      label.setAttribute("y", node.y + node.h / 2);
+      label.setAttribute("dominant-baseline", "central");
+      label.setAttribute("fill", node.style.fill);
+      label.setAttribute("font-family", node.style.family);
+      label.setAttribute("font-size", node.style.size);
+      label.setAttribute("font-weight", node.style.weight);
+      label.textContent = node.title;
+      group.appendChild(label);
+    } else {
+      const fo = document.createElementNS(NS, "foreignObject");
+      const editW = Math.max(node.labelW + 28, 72);
+      fo.setAttribute("x", node.x - 6);
+      fo.setAttribute("y", node.y + 4);
+      fo.setAttribute("width", editW);
+      fo.setAttribute("height", node.h - 8);
+      const input = document.createElement("input");
+      input.className = "inline-edit";
+      input.type = "text";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.value = activeValue != null ? activeValue : node.title;
+      input.style.fontFamily = node.style.family;
+      input.style.fontSize = node.style.size + "px";
+      input.style.fontWeight = node.style.weight;
+      fo.appendChild(input);
+      group.appendChild(fo);
+      editInput = input;
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitEdit(true);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          commitEdit(false);
+        } else if (event.key === "Tab") {
+          event.preventDefault();
+          commitEdit(true);
+          addChild(selected);
+        }
+      });
+      input.addEventListener("input", () => {
+        const value = input.value || " ";
+        node.labelW = textWidth(value, node.style.weight + " " + node.style.size + "px " + node.style.family);
+        fo.setAttribute("width", Math.max(node.labelW + 28, 72));
+      });
+      input.addEventListener("blur", () => {
+        if (ignoreBlur) return;
+        commitEdit(true);
+      });
+
+      requestAnimationFrame(() => {
+        if (!editInput) return;
+        editInput.focus();
+        if (selectionStart != null && selectionEnd != null) {
+          try { editInput.setSelectionRange(selectionStart, selectionEnd); }
+          catch (_) { editInput.select(); }
+        } else {
+          editInput.select();
+        }
+      });
+    }
+
+    if (node.hasChildren) {
+      const mx = node.x + (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + 16;
+      const my = node.y + node.h / 2;
+      const mark = document.createElementNS(NS, "circle");
+      mark.setAttribute("cx", mx);
+      mark.setAttribute("cy", my);
+      mark.setAttribute("r", 7);
+      mark.setAttribute("fill", "#fff");
+      mark.setAttribute("stroke", "#111");
+      mark.setAttribute("stroke-width", 1.2);
+      group.appendChild(mark);
+      const hline = document.createElementNS(NS, "path");
+      hline.setAttribute("d", "M " + (mx - 3.2) + " " + my + " H " + (mx + 3.2));
+      hline.setAttribute("stroke", "#111");
+      hline.setAttribute("stroke-width", 1.2);
+      hline.setAttribute("fill", "none");
+      group.appendChild(hline);
+      if (!node.open) {
+        const vline = document.createElementNS(NS, "path");
+        vline.setAttribute("d", "M " + mx + " " + (my - 3.2) + " V " + (my + 3.2));
+        vline.setAttribute("stroke", "#111");
+        vline.setAttribute("stroke-width", 1.2);
+        vline.setAttribute("fill", "none");
+        group.appendChild(vline);
+      }
+      if (node.marker) {
+        const count = document.createElementNS(NS, "text");
+        count.setAttribute("x", mx + 14);
+        count.setAttribute("y", my);
+        count.setAttribute("dominant-baseline", "central");
+        count.setAttribute("fill", "#888");
+        count.setAttribute("font-family", sans);
+        count.setAttribute("font-size", 13);
+        count.setAttribute("font-weight", 400);
+        count.textContent = String(node.marker);
+        group.appendChild(count);
+      }
+      if (!isEditingNode) {
+        const markHit = document.createElementNS(NS, "circle");
+        markHit.setAttribute("cx", mx);
+        markHit.setAttribute("cy", my);
+        markHit.setAttribute("r", 12);
+        markHit.setAttribute("fill", "transparent");
+        markHit.style.cursor = "pointer";
+        markHit.addEventListener("pointerdown", (event) => {
+          event.stopPropagation();
+          armDrag(event, node, "toggle");
+        });
+        group.appendChild(markHit);
+      }
+    }
+
+    if (!isEditingNode) {
+      group.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        armDrag(event, node, "select");
+      });
+      // Native dblclick is unreliable: the first click redraws SVG and replaces
+      // this element, so the browser never synthesizes dblclick. Editing is
+      // handled by recognizeNodeTap() in endDrag instead.
+      group.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        selected = node;
+        updateChrome();
+        draw();
+        showMenu(event.clientX, event.clientY);
+      });
+    }
+    nodes.appendChild(group);
+  }
+
+  visit(tree);
+  apply();
+}
+
+function apply() {
+  viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + scale + ")");
+}
+
+function relayout(anchor) {
+  const before = anchor ? anchor.y : 0;
+  layout(tree);
+  place(tree, 0, 0);
+  if (anchor && anchor.y != null) ty += (before - anchor.y) * scale;
+  draw();
+}
+
+let drag = null;
+function armDrag(event, node, mode) {
+  if (editing) return;
+  hideMenu();
+  drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node, mode };
+  svg.setPointerCapture(event.pointerId);
+}
+svg.addEventListener("pointerdown", (event) => {
+  if (editing) return;
+  hideMenu();
+  armDrag(event, null, "pan");
+});
+svg.addEventListener("pointermove", (event) => {
+  if (!drag || editing) return;
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+  drag.moved = true;
+  svg.classList.add("dragging");
+  tx = drag.tx + dx;
+  ty = drag.ty + dy;
+  apply();
+});
+function endDrag() {
+  if (drag && !drag.moved && drag.node) {
+    if (drag.mode === "toggle") {
+      lastTap = { node: null, time: 0 };
+      drag.node.open = !drag.node.open;
+      selected = drag.node;
+      updateChrome();
+      relayout(drag.node);
+      saveLocal();
+    } else if (drag.mode === "select") {
+      const result = recognizeNodeTap(lastTap, drag.node, Date.now());
+      lastTap = result.next;
+      if (result.action === "edit") {
+        beginEdit(drag.node);
+      } else {
+        selected = drag.node;
+        updateChrome();
+        draw();
+      }
+    }
+  } else if (drag && !drag.moved && !drag.node) {
+    lastTap = { node: null, time: 0 };
+    selected = null;
+    updateChrome();
+    draw();
+  }
+  drag = null;
+  svg.classList.remove("dragging");
+}
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", () => { drag = null; svg.classList.remove("dragging"); });
+svg.addEventListener("wheel", (event) => {
+  if (editing) return;
+  event.preventDefault();
+  if (event.ctrlKey || event.metaKey) {
+    const next = Math.min(2.4, Math.max(0.35, scale * (event.deltaY < 0 ? 1.08 : 0.92)));
+    const rect = svg.getBoundingClientRect();
+    const px = event.clientX - rect.left;
+    const py = event.clientY - rect.top;
+    tx = px - ((px - tx) * next) / scale;
+    ty = py - ((py - ty) * next) / scale;
+    scale = next;
+  } else {
+    tx -= event.deltaX;
+    ty -= event.deltaY;
+  }
+  apply();
+}, { passive: false });
+
+function bounds() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  (function scan(node) {
+    if (!node.style) return;
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.w);
+    maxY = Math.max(maxY, node.y + node.h);
+    if (node.open) node.children.forEach(scan);
+  })(tree);
+  return { minX, minY, w: maxX - minX, h: maxY - minY };
+}
+
+function frame() {
+  layout(tree);
+  place(tree, 0, 0);
+  const box = bounds();
+  const pad = 40;
+  const fitW = (window.innerWidth - pad * 2) / Math.max(box.w, 1);
+  const fitH = (window.innerHeight - pad * 2) / Math.max(box.h, 1);
+  const fit = Math.min(fitW, fitH);
+  scale = Math.min(1, Number.isFinite(fit) ? (fit >= 0.78 ? fit : fitW) : 1);
+  if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+  tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
+  const fittedH = box.h * scale;
+  ty = fittedH < window.innerHeight - pad
+    ? (window.innerHeight - fittedH) / 2 - box.minY * scale
+    : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
+  draw();
+}
+
+function beginEdit(node) {
+  if (!node) return;
+  hideMenu();
+  if (editing && selected === node) {
+    editInput && editInput.focus();
+    return;
+  }
+  if (editing) commitEdit(true);
+  selected = node;
+  editing = true;
+  editInput = null;
+  updateChrome();
+  layout(tree);
+  place(tree, 0, 0);
+  draw();
+}
+
+function commitEdit(save) {
+  if (!editing) return;
+  const node = selected;
+  const value = editInput ? editInput.value.replace(/\s+/g, " ").trim() : (node && node.title);
+  ignoreBlur = true;
+  editing = false;
+  editInput = null;
+  if (save && node) {
+    node.title = value || "未命名";
+    if (node === tree) {
+      document.title = pageTitleOf(tree) + " · mm";
+      svg.setAttribute("aria-label", pageTitleOf(tree));
+    }
+  }
+  updateChrome();
+  relayout(node);
+  saveLocal();
+  requestAnimationFrame(() => { ignoreBlur = false; });
+}
+
+function addChild(parent) {
+  if (!parent) return;
+  if (editing) commitEdit(true);
+  const child = { title: "新节点", children: [], open: true, depth: (parent.depth || 0) + 1 };
+  parent.children.push(child);
+  parent.open = true;
+  refreshDepth(tree, 0);
+  selected = child;
+  editing = true;
+  editInput = null;
+  updateChrome();
+  layout(tree);
+  place(tree, 0, 0);
+  draw();
+  saveLocal();
+}
+
+function addSibling(node) {
+  const info = locate(node);
+  if (!info || !info.parent) return;
+  if (editing) commitEdit(true);
+  const sibling = { title: "新节点", children: [], open: true };
+  info.parent.children.splice(info.index + 1, 0, sibling);
+  refreshDepth(tree, 0);
+  selected = sibling;
+  editing = true;
+  editInput = null;
+  updateChrome();
+  layout(tree);
+  place(tree, 0, 0);
+  draw();
+  saveLocal();
+}
+
+function deleteNode(node) {
+  const info = locate(node);
+  if (!info || !info.parent) {
+    toast("不能删除中心节点");
+    return;
+  }
+  if (editing) commitEdit(false);
+  const parent = info.parent;
+  parent.children.splice(info.index, 1);
+  refreshDepth(tree, 0);
+  selected = parent;
+  updateChrome();
+  relayout(parent);
+  saveLocal();
+}
+
+function showMenu(x, y) {
+  menu.style.display = "block";
+  const pad = 8;
+  const rect = menu.getBoundingClientRect();
+  const left = Math.min(x, window.innerWidth - rect.width - pad);
+  const top = Math.min(y, window.innerHeight - rect.height - pad);
+  menu.style.left = Math.max(pad, left) + "px";
+  menu.style.top = Math.max(pad, top) + "px";
+}
+
+function hideMenu() {
+  menu.style.display = "none";
+}
+
+function armToolbar(btn, action) {
+  btn.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    ignoreBlur = true;
+  });
+  btn.addEventListener("click", () => {
+    action();
+    requestAnimationFrame(() => { ignoreBlur = false; });
+  });
+}
+
+menu.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  ignoreBlur = true;
+});
+menu.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-act]");
+  if (!btn || btn.disabled) return;
+  const act = btn.getAttribute("data-act");
+  hideMenu();
+  if (act === "rename") beginEdit(selected);
+  if (act === "child") addChild(selected);
+  if (act === "sibling") addSibling(selected);
+  if (act === "delete") deleteNode(selected);
+  requestAnimationFrame(() => { ignoreBlur = false; });
+});
+
+armToolbar(editBtn, () => beginEdit(selected));
+armToolbar(addChildBtn, () => addChild(selected));
+armToolbar(addSiblingBtn, () => addSibling(selected));
+armToolbar(deleteBtn, () => deleteNode(selected));
+
+window.addEventListener("keydown", (event) => {
+  if (editing) return;
+  const tag = event.target && event.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable) return;
+  if (!selected) return;
+  if (event.key === "Tab") {
+    event.preventDefault();
+    addChild(selected);
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    if (selected === tree) addChild(selected);
+    else addSibling(selected);
+  } else if (event.key === "F2") {
+    event.preventDefault();
+    beginEdit(selected);
+  } else if (event.key === "Backspace" || event.key === "Delete") {
+    event.preventDefault();
+    deleteNode(selected);
+  } else if (event.key === "Escape") {
+    selected = null;
+    updateChrome();
+    draw();
+  }
+});
+
+function loadTree(next, name, keepOpen) {
+  if (editing) {
+    editing = false;
+    editInput = null;
+  }
+  tree = next;
+  selected = null;
+  if (name) fileName = name.replace(/\.markdown$/i, ".md");
+  prepare(tree, keepOpen);
+  const title = pageTitleOf(tree);
+  document.title = title + " · mm";
+  svg.setAttribute("aria-label", title);
+  updateChrome();
+  frame();
+  saveLocal();
+}
+
+async function importFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    loadTree(parseMarkdown(text), file.name || "outline.md", false);
+    toast("已导入 " + (file.name || "Markdown"));
+  } catch (error) {
+    toast(error.message || String(error));
+  }
+}
+
+function downloadMarkdown() {
+  if (editing) commitEdit(true);
+  const blob = new Blob([toMarkdown(tree)], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || ((tree.title || "mindmap") + ".md");
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("已下载 " + (fileName || "mindmap.md"));
+}
+
+document.getElementById("uploadBtn").addEventListener("click", () => fileInput.click());
+document.getElementById("downloadBtn").addEventListener("click", downloadMarkdown);
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files && fileInput.files[0];
+  fileInput.value = "";
+  importFile(file);
+});
+
+let dragDepth = 0;
+window.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  document.body.classList.add("dragging-file");
+});
+window.addEventListener("dragover", (event) => event.preventDefault());
+window.addEventListener("dragleave", (event) => {
+  event.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) document.body.classList.remove("dragging-file");
+});
+window.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging-file");
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (!file) return;
+  if (!/\.(md|markdown|txt)$/i.test(file.name) && file.type && !/^text\//.test(file.type)) {
+    toast("请拖入 Markdown 文本文件");
+    return;
+  }
+  importFile(file);
+});
+
+window.addEventListener("click", (event) => {
+  if (!menu.contains(event.target)) hideMenu();
+});
+
+const cached = store.load();
+if (cached) {
+  tree = cached.tree;
+  fileName = cached.fileName || "mindmap.md";
+  prepare(tree, true);
+  document.title = pageTitleOf(tree) + " · mm";
+  svg.setAttribute("aria-label", pageTitleOf(tree));
+} else {
+  tree = cloneData(DEMO);
+  prepare(tree, true);
+}
+updateChrome();
+frame();
+window.addEventListener("resize", () => {
+  if (!editing) frame();
+});
+
+window.__mm = {
+  recognizeNodeTap,
+  getTree: () => tree,
+  getSelected: () => selected,
+  isEditing: () => editing,
+  beginEdit: (node) => beginEdit(node || selected),
+  doubleTap: (node) => {
+    const target = node || selected || tree;
+    const first = recognizeNodeTap(null, target, Date.now());
+    lastTap = first.next;
+    selected = target;
+    updateChrome();
+    draw();
+    const second = recognizeNodeTap(lastTap, target, Date.now());
+    lastTap = second.next;
+    if (second.action === "edit") beginEdit(target);
+    return second.action;
+  },
+};
+</script>
+</body>
+</html>
