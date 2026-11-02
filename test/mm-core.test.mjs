@@ -329,6 +329,12 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /ctx-menu/);
   assert.match(html, /confirmModal/);
   assert.match(html, /downloadModal/);
+  assert.match(html, /id="closeDocBtn"/);
+  assert.match(html, /requestCloseDocument/);
+  assert.match(html, /closeDocument/);
+  assert.match(html, /关闭当前文档？/);
+  assert.match(html, /store\.clear\(\)/);
+  assert.match(html, /缩进段落 → 副标题/);
   assert.match(html, /undoBtn/);
   assert.match(html, /redoBtn/);
   assert.match(html, /showCtxMenu/);
