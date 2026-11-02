@@ -19,14 +19,19 @@ import {
   FONT_KEY,
   FONT_PRESETS,
   MODE_KEY,
+  THEME_KEY,
+  THEME_PRESETS,
   buildLevelStyles,
   fontStacksFor,
   normalizeAppMode,
   normalizeDownloadName,
   normalizeFontId,
+  normalizeThemeId,
   parseMarkdown,
   readAppMode,
   readFontId,
+  readThemeId,
+  resolveTheme,
   parseTitleSubtitle,
   pathToNode,
   recognizeNodeTap,
@@ -35,6 +40,7 @@ import {
   toMarkdown,
   writeAppMode,
   writeFontId,
+  writeThemeId,
 } from "../public/mm-core.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -285,6 +291,8 @@ test("global font persists and drives level styles", () => {
   assert.equal(styles.length, 5);
   assert.equal(styles[0].family, styles[4].family);
   assert.match(styles[0].family, /PingFang/);
+  assert.equal(styles[0].fill, "var(--map-ink)");
+  assert.equal(styles[4].fill, "var(--map-ink-soft)");
 
   const memory = new Map();
   const storage = {
@@ -295,6 +303,26 @@ test("global font persists and drives level styles", () => {
   assert.equal(writeFontId("song", storage), true);
   assert.equal(storage.getItem(FONT_KEY), "song");
   assert.equal(readFontId(storage), "song");
+});
+
+test("theme preference persists and resolves light/dark/system", () => {
+  assert.equal(normalizeThemeId("dark"), "dark");
+  assert.equal(normalizeThemeId("nope"), "system");
+  assert.ok(THEME_PRESETS.some((preset) => preset.id === "system"));
+  assert.equal(resolveTheme("light", true), "light");
+  assert.equal(resolveTheme("dark", false), "dark");
+  assert.equal(resolveTheme("system", true), "dark");
+  assert.equal(resolveTheme("system", false), "light");
+
+  const memory = new Map();
+  const storage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+  };
+  assert.equal(readThemeId(storage), "system");
+  assert.equal(writeThemeId("dark", storage), true);
+  assert.equal(storage.getItem(THEME_KEY), "dark");
+  assert.equal(readThemeId(storage), "dark");
 });
 
 test("createLocalStore persists and restores tree", () => {
@@ -347,10 +375,16 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /data-mode="view"/);
   assert.match(html, /data-mode="edit"/);
   assert.match(html, /id="fontSelect"/);
+  assert.match(html, /id="themeSelect"/);
   assert.match(html, /FONT_PRESETS/);
+  assert.match(html, /THEME_PRESETS/);
   assert.match(html, /buildLevelStyles/);
   assert.match(html, /readFontId/);
   assert.match(html, /writeFontId/);
+  assert.match(html, /readThemeId/);
+  assert.match(html, /writeThemeId/);
+  assert.match(html, /data-theme/);
+  assert.match(html, /var\(--map-ink\)/);
   assert.match(html, /armLongPress/);
   assert.match(html, /data-field", "desc"/);
   assert.match(html, /readAppMode/);

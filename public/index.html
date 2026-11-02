@@ -11,24 +11,135 @@
     <link rel="canonical" href="https://mm.wenfu.dev/" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#ffffff" id="themeColor" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="mm" />
+    <script>
+      (function () {
+        try {
+          var key = "mm.wenfu.dev/theme";
+          var pref = localStorage.getItem(key) || "system";
+          if (pref !== "light" && pref !== "dark") pref = "system";
+          var dark =
+            pref === "dark" ||
+            (pref !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.setAttribute(
+            "data-theme",
+            dark ? "dark" : "light",
+          );
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (_) {}
+      })();
+    </script>
     <style>
-      :root {
+      :root,
+      [data-theme="light"] {
+        color-scheme: light;
         --font-body:
           "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
           sans-serif;
         --font-title:
           "Songti SC", "STSongti-SC-Regular", "Noto Serif SC", "SimSun", serif;
+        --bg: #fff;
+        --fg: #111;
+        --fg-muted: #666;
+        --fg-subtle: #888;
+        --fg-faint: #999;
+        --fg-placeholder: #aaa;
+        --fg-soft: #333;
+        --fg-body: #222;
+        --fg-label: #555;
+        --fg-switch: #777;
+        --border: #ddd;
+        --border-strong: #ccc;
+        --border-hover: #999;
+        --surface: #fff;
+        --surface-2: #fafafa;
+        --surface-3: #f7f7f7;
+        --hover: #f3f3f3;
+        --selected: #f0f0f0;
+        --sep: #e5e5e5;
+        --hairline: #eee;
+        --primary: #111;
+        --primary-fg: #fff;
+        --primary-hover: #222;
+        --primary-border-hover: #000;
+        --danger: #b00020;
+        --shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+        --shadow-strong: 0 10px 28px rgba(0, 0, 0, 0.12);
+        --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.1);
+        --shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.08);
+        --overlay: rgba(255, 255, 255, 0.72);
+        --drop-overlay: rgba(255, 255, 255, 0.82);
+        --toast-bg: #111;
+        --toast-fg: #fff;
+        --theme-color: #ffffff;
+        --map-ink: #111;
+        --map-ink-soft: #333;
+        --map-muted: #888;
+        --map-faint: #bbb;
+        --map-sel: #f0f0f0;
+        --map-paper: #fff;
+        --map-paper-active: #eee;
+        --map-paper-stroke: #666;
+        --map-mark-fill: #fff;
+        --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      }
+      [data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #121212;
+        --fg: #e8e8e8;
+        --fg-muted: #a3a3a3;
+        --fg-subtle: #8a8a8a;
+        --fg-faint: #777;
+        --fg-placeholder: #6a6a6a;
+        --fg-soft: #c8c8c8;
+        --fg-body: #d6d6d6;
+        --fg-label: #b0b0b0;
+        --fg-switch: #8a8a8a;
+        --border: #333;
+        --border-strong: #3a3a3a;
+        --border-hover: #666;
+        --surface: #1a1a1a;
+        --surface-2: #161616;
+        --surface-3: #222;
+        --hover: #2a2a2a;
+        --selected: #2a2a2a;
+        --sep: #333;
+        --hairline: #2a2a2a;
+        --primary: #e8e8e8;
+        --primary-fg: #111;
+        --primary-hover: #fff;
+        --primary-border-hover: #fff;
+        --danger: #ff6b7a;
+        --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        --shadow-strong: 0 10px 28px rgba(0, 0, 0, 0.5);
+        --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.5);
+        --shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --overlay: rgba(0, 0, 0, 0.62);
+        --drop-overlay: rgba(18, 18, 18, 0.86);
+        --toast-bg: #e8e8e8;
+        --toast-fg: #111;
+        --theme-color: #121212;
+        --map-ink: #e8e8e8;
+        --map-ink-soft: #c8c8c8;
+        --map-muted: #8a8a8a;
+        --map-faint: #555;
+        --map-sel: #2a2a2a;
+        --map-paper: #1a1a1a;
+        --map-paper-active: #2a2a2a;
+        --map-paper-stroke: #888;
+        --map-mark-fill: #121212;
+        --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
       }
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #fff;
-        color: #111;
+        background: var(--bg);
+        color: var(--fg);
         overflow: hidden;
         font-family: var(--font-body);
         font-size: 13px;
@@ -69,10 +180,10 @@
       .modal-actions button {
         margin: 0;
         padding: 7px 12px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
         font-size: 13px;
         line-height: 1;
         cursor: pointer;
@@ -84,11 +195,11 @@
       .toolbar button:hover:not(:disabled),
       .ctx-menu button:hover:not(:disabled),
       .modal button:hover:not(:disabled) {
-        border-color: #999;
+        border-color: var(--border-hover);
       }
       .toolbar button:hover:not(:disabled) {
         border-color: transparent;
-        background: #f3f3f3;
+        background: var(--hover);
       }
       .toolbar button.icon {
         width: 34px;
@@ -117,7 +228,7 @@
         height: 30px;
         padding: 2px;
         border-radius: 8px;
-        background: #f7f7f7;
+        background: var(--surface-3);
       }
       .toolbar .mode-switch button {
         height: 26px;
@@ -126,33 +237,33 @@
         border: 0;
         border-radius: 6px;
         background: transparent;
-        color: #777;
+        color: var(--fg-switch);
         font-size: 13px;
         line-height: 1;
       }
       .toolbar .mode-switch button:hover:not(:disabled) {
         border-color: transparent;
         background: transparent;
-        color: #111;
+        color: var(--fg);
       }
       .toolbar .mode-switch button[aria-checked="true"] {
-        background: #fff;
-        color: #111;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        background: var(--surface);
+        color: var(--fg);
+        box-shadow: var(--shadow-switch);
       }
       .toolbar .mode-switch button[aria-checked="true"]:hover:not(:disabled) {
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
       }
       .toolbar .mode-switch button:focus-visible {
-        outline: 2px solid #111;
+        outline: 2px solid var(--fg);
         outline-offset: 1px;
       }
       .toolbar .sep {
         width: 1px;
         height: 18px;
         margin: 0 2px;
-        background: #e5e5e5;
+        background: var(--sep);
       }
       #map {
         -webkit-touch-callout: none;
@@ -170,14 +281,14 @@
         border: 1px solid transparent;
         border-radius: 6px;
         background: transparent;
-        color: #111;
+        color: var(--fg);
         display: inline-flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
       }
       .settings > button.icon:hover {
-        background: #f3f3f3;
+        background: var(--hover);
       }
       .settings > button.icon svg {
         width: 16px;
@@ -193,11 +304,11 @@
         max-width: min(280px, calc(100vw - 28px));
         margin: 0;
         padding: 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 8px;
-        background: #fff;
-        color: #333;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+        background: var(--surface);
+        color: var(--fg-soft);
+        box-shadow: var(--shadow);
         font-size: 13px;
         line-height: 1.45;
         opacity: 0;
@@ -220,9 +331,12 @@
         align-items: center;
         gap: 10px;
       }
+      .settings-row + .settings-row {
+        margin-top: 10px;
+      }
       .settings-row > span {
         flex: 0 0 auto;
-        color: #666;
+        color: var(--fg-muted);
         white-space: nowrap;
       }
       .settings-row select {
@@ -235,19 +349,18 @@
         min-width: 0;
         border: 0;
         border-radius: 8px;
-        background: #f7f7f7
-          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")
-          no-repeat right 8px center;
-        color: #111;
+        background: var(--surface-3) var(--select-chevron) no-repeat right 8px
+          center;
+        color: var(--fg);
         font-size: 13px;
         line-height: 1;
         cursor: pointer;
       }
       .settings-row select:hover {
-        background-color: #f0f0f0;
+        background-color: var(--selected);
       }
       .settings-row select:focus-visible {
-        outline: 2px solid #111;
+        outline: 2px solid var(--fg);
         outline-offset: 1px;
       }
       .note-pop {
@@ -257,11 +370,11 @@
         width: min(320px, calc(100vw - 24px));
         margin: 0;
         padding: 0;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 10px;
-        background: #fff;
-        color: #222;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        background: var(--surface);
+        color: var(--fg-body);
+        box-shadow: var(--shadow-strong);
         overflow: hidden;
       }
       .note-pop.show {
@@ -277,12 +390,12 @@
         line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
-        color: #333;
+        color: var(--fg-soft);
         cursor: default;
       }
       .note-pop .note-view:empty::before {
         content: "暂无备注";
-        color: #aaa;
+        color: var(--fg-placeholder);
       }
       .note-pop .note-edit {
         display: none;
@@ -297,8 +410,8 @@
         max-height: 280px;
         font-size: 13px;
         line-height: 1.5;
-        color: #222;
-        background: #fff;
+        color: var(--fg-body);
+        background: var(--surface);
       }
       .note-pop.editing .note-view {
         display: none;
@@ -311,8 +424,8 @@
         justify-content: flex-end;
         gap: 8px;
         padding: 8px 10px;
-        border-top: 1px solid #eee;
-        background: #fafafa;
+        border-top: 1px solid var(--hairline);
+        background: var(--surface-2);
       }
       .note-pop .note-foot[hidden] {
         display: none;
@@ -320,25 +433,25 @@
       .note-pop .note-foot button {
         margin: 0;
         padding: 6px 10px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
         font-size: 12px;
         line-height: 1;
         cursor: pointer;
       }
       .note-pop .note-foot button.primary {
-        border-color: #111;
-        background: #111;
-        color: #fff;
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--primary-fg);
       }
       .note-pop .note-foot button:hover {
-        border-color: #999;
+        border-color: var(--border-hover);
       }
       .note-pop .note-foot button.primary:hover {
-        border-color: #000;
-        background: #222;
+        border-color: var(--primary-border-hover);
+        background: var(--primary-hover);
       }
       .icon-pop {
         position: fixed;
@@ -347,11 +460,11 @@
         width: min(400px, calc(100vw - 24px));
         margin: 0;
         padding: 0;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 10px;
-        background: #fff;
-        color: #222;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        background: var(--surface);
+        color: var(--fg-body);
+        box-shadow: var(--shadow-strong);
         overflow: hidden;
       }
       .icon-pop.show {
@@ -365,16 +478,16 @@
         width: calc(100% - 16px);
         margin: 8px 8px 0;
         padding: 7px 10px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 8px;
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
         font-size: 13px;
         line-height: 1.3;
       }
       .icon-pop .icon-search:focus {
         outline: none;
-        border-color: #111;
+        border-color: var(--fg);
       }
       .icon-pop .icon-tabs {
         display: flex;
@@ -384,7 +497,7 @@
         flex: 0 0 auto;
         overflow-x: auto;
         padding: 6px 8px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--hairline);
         scrollbar-width: thin;
       }
       .icon-pop .icon-tabs button {
@@ -394,15 +507,15 @@
         border: 0;
         border-radius: 7px;
         background: transparent;
-        color: #666;
+        color: var(--fg-muted);
         font-size: 12px;
         line-height: 1;
         cursor: pointer;
         white-space: nowrap;
       }
       .icon-pop .icon-tabs button.active {
-        background: #f3f3f3;
-        color: #111;
+        background: var(--hover);
+        color: var(--fg);
         font-weight: 600;
       }
       .icon-pop .icon-grid {
@@ -436,14 +549,14 @@
         overflow: hidden;
       }
       .icon-pop .icon-grid button:hover {
-        background: #f3f3f3;
+        background: var(--hover);
       }
       .icon-pop .icon-empty {
         grid-column: 1 / -1;
         margin: 0;
         padding: 48px 20px;
         text-align: center;
-        color: #999;
+        color: var(--fg-faint);
         font-size: 13px;
         line-height: 1.5;
         white-space: normal;
@@ -454,22 +567,22 @@
         align-items: center;
         gap: 8px;
         padding: 8px 10px;
-        border-top: 1px solid #eee;
-        background: #fafafa;
+        border-top: 1px solid var(--hairline);
+        background: var(--surface-2);
       }
       .icon-pop .icon-foot button {
         margin: 0;
         padding: 6px 10px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
         font-size: 12px;
         line-height: 1;
         cursor: pointer;
       }
       .icon-pop .icon-foot button:hover {
-        border-color: #999;
+        border-color: var(--border-hover);
       }
       .toast {
         position: fixed;
@@ -479,8 +592,8 @@
         margin: 0;
         padding: 8px 14px;
         border-radius: 6px;
-        background: #111;
-        color: #fff;
+        background: var(--toast-bg);
+        color: var(--toast-fg);
         font-size: 13px;
         line-height: 1.4;
         opacity: 0;
@@ -498,12 +611,12 @@
         display: none;
         align-items: center;
         justify-content: center;
-        background: rgba(255, 255, 255, 0.82);
-        border: 2px dashed #111;
+        background: var(--drop-overlay);
+        border: 2px dashed var(--fg);
         box-sizing: border-box;
         font-size: 18px;
         line-height: 1.4;
-        color: #111;
+        color: var(--fg);
         pointer-events: none;
       }
       body.dragging-file .drop {
@@ -516,11 +629,11 @@
         margin: 0;
         padding: 0 2px;
         box-sizing: border-box;
-        border: 1px solid #111;
+        border: 1px solid var(--map-ink);
         border-radius: 3px;
         outline: none;
-        background: #fff;
-        color: #111;
+        background: var(--bg);
+        color: var(--map-ink);
         font: inherit;
         line-height: 1;
       }
@@ -530,10 +643,10 @@
         display: none;
         margin: 0;
         padding: 0;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+        background: var(--surface);
+        box-shadow: var(--shadow);
       }
       .ctx-menu.show {
         display: block;
@@ -541,7 +654,7 @@
       .ctx-menu .sep {
         height: 1px;
         margin: 4px 6px;
-        background: #eee;
+        background: var(--hairline);
       }
       .ctx-menu button {
         display: flex;
@@ -556,14 +669,14 @@
         text-align: left;
       }
       .ctx-menu button:hover:not(:disabled) {
-        background: #f3f3f3;
+        background: var(--hover);
       }
       .ctx-menu button:disabled {
         opacity: 0.35;
         cursor: default;
       }
       .ctx-menu button.danger {
-        color: #b00020;
+        color: var(--danger);
       }
       .ctx-menu button svg {
         width: 16px;
@@ -576,7 +689,7 @@
       .ctx-menu button .kbd {
         flex: 0 0 auto;
         margin-left: 18px;
-        color: #888;
+        color: var(--fg-subtle);
         font-size: 12px;
         font-variant-numeric: tabular-nums;
       }
@@ -587,7 +700,7 @@
         display: none;
         align-items: center;
         justify-content: center;
-        background: rgba(255, 255, 255, 0.72);
+        background: var(--overlay);
       }
       .modal-backdrop.show {
         display: flex;
@@ -595,10 +708,10 @@
       .modal {
         width: min(420px, calc(100vw - 32px));
         padding: 20px 20px 16px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border);
         border-radius: 12px;
-        background: #fff;
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+        background: var(--surface);
+        box-shadow: var(--shadow-modal);
       }
       .modal h2 {
         margin: 0 0 8px;
@@ -610,14 +723,14 @@
         margin: 0 0 16px;
         font-size: 14px;
         line-height: 1.5;
-        color: #333;
+        color: var(--fg-soft);
       }
       .modal label {
         display: block;
         margin: 0 0 6px;
         font-size: 13px;
         line-height: 1.3;
-        color: #555;
+        color: var(--fg-label);
       }
       .modal input[type="text"],
       .modal select {
@@ -625,16 +738,16 @@
         box-sizing: border-box;
         margin: 0 0 14px;
         padding: 9px 10px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        background: #fff;
-        color: #111;
+        background: var(--surface);
+        color: var(--fg);
         font-size: 14px;
         line-height: 1.3;
       }
       .modal select:disabled,
       .modal option:disabled {
-        color: #999;
+        color: var(--fg-faint);
       }
       .modal-actions {
         display: flex;
@@ -643,13 +756,13 @@
         margin-top: 4px;
       }
       .modal-actions .primary {
-        border-color: #111;
-        background: #111;
-        color: #fff;
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--primary-fg);
       }
       .modal-actions .primary:hover {
-        border-color: #000;
-        background: #222;
+        border-color: var(--primary-border-hover);
+        background: var(--primary-hover);
       }
     </style>
   </head>
@@ -822,6 +935,10 @@
           role="dialog"
           aria-label="设置"
         >
+          <label class="settings-row" title="外观主题">
+            <span>主题</span>
+            <select id="themeSelect" aria-label="外观主题"></select>
+          </label>
           <label class="settings-row" title="全局字体">
             <span>字体</span>
             <select id="fontSelect" aria-label="全局字体"></select>
@@ -1017,6 +1134,7 @@
         DOWNLOAD_FORMATS,
         EMOJI_CATEGORIES,
         FONT_PRESETS,
+        THEME_PRESETS,
         buildDownload,
         buildLevelStyles,
         captureState,
@@ -1033,13 +1151,17 @@
         pathToNode,
         readAppMode,
         normalizeFontId,
+        normalizeThemeId,
         readFontId,
+        readThemeId,
         recognizeNodeTap,
+        resolveTheme,
         writeAppMode,
         writeFontId,
+        writeThemeId,
         shouldConfirmOverwrite,
         toMarkdown,
-      } from "./mm-core.js?v=20261102o";
+      } from "./mm-core.js?v=20261102p";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1122,6 +1244,7 @@
       let ignoreBlur = false;
       let appMode = readAppMode();
       let fontId = readFontId();
+      let themeId = readThemeId();
       let pendingConfirm = null;
       let editBaseline = null;
       let longPressTimer = null;
@@ -1145,8 +1268,14 @@
       const uploadBtn = document.getElementById("uploadBtn");
       const closeDocBtn = document.getElementById("closeDocBtn");
       const modeSwitch = document.getElementById("modeSwitch");
+      const themeSelect = document.getElementById("themeSelect");
       const fontSelect = document.getElementById("fontSelect");
+      const themeColorMeta = document.getElementById("themeColor");
       const redoBtn = document.getElementById("redoBtn");
+      const systemThemeMq =
+        typeof window.matchMedia === "function"
+          ? window.matchMedia("(prefers-color-scheme: dark)")
+          : null;
       const confirmModal = document.getElementById("confirmModal");
       const confirmTitle = document.getElementById("confirmTitle");
       const confirmText = document.getElementById("confirmText");
@@ -1177,6 +1306,29 @@
       let sans;
       let styles;
 
+      function systemPrefersDark() {
+        return !!(systemThemeMq && systemThemeMq.matches);
+      }
+
+      function applyTheme(nextId, { persist = true, announce = false } = {}) {
+        themeId = normalizeThemeId(nextId);
+        const resolved = resolveTheme(themeId, systemPrefersDark());
+        document.documentElement.setAttribute("data-theme", resolved);
+        document.documentElement.style.colorScheme = resolved;
+        if (themeColorMeta) {
+          const color = getComputedStyle(document.documentElement)
+            .getPropertyValue("--theme-color")
+            .trim();
+          if (color) themeColorMeta.setAttribute("content", color);
+        }
+        themeSelect.value = themeId;
+        if (persist) writeThemeId(themeId);
+        if (announce) {
+          const preset = THEME_PRESETS.find((item) => item.id === themeId);
+          toast(`主题：${preset ? preset.label : "跟随系统"}`);
+        }
+      }
+
       function applyFont(nextId, { persist = true, announce = false } = {}) {
         fontId = normalizeFontId(nextId);
         const stacks = fontStacksFor(fontId);
@@ -1198,13 +1350,30 @@
         }
       }
 
+      THEME_PRESETS.forEach((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.label;
+        themeSelect.appendChild(option);
+      });
       FONT_PRESETS.forEach((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
         option.textContent = preset.label;
         fontSelect.appendChild(option);
       });
+      applyTheme(themeId, { persist: false });
       applyFont(fontId, { persist: false });
+      if (systemThemeMq) {
+        const onSystemTheme = () => {
+          if (themeId === "system") applyTheme("system", { persist: false });
+        };
+        if (typeof systemThemeMq.addEventListener === "function") {
+          systemThemeMq.addEventListener("change", onSystemTheme);
+        } else if (typeof systemThemeMq.addListener === "function") {
+          systemThemeMq.addListener(onSystemTheme);
+        }
+      }
 
       function descText(node) {
         return node && node.desc ? String(node.desc).trim() : "";
@@ -1313,6 +1482,10 @@
 
       function setFont(nextId) {
         applyFont(nextId, { persist: true, announce: true });
+      }
+
+      function setTheme(nextId) {
+        applyTheme(nextId, { persist: true, announce: true });
       }
 
       function updateHistoryChrome() {
@@ -1874,7 +2047,7 @@
                   y2,
               );
               path.setAttribute("fill", "none");
-              path.setAttribute("stroke", "#111");
+              path.setAttribute("stroke", "var(--map-ink)");
               path.setAttribute("stroke-width", node.depth === 0 ? 1.6 : 1);
               links.appendChild(path);
               visit(child);
@@ -1911,7 +2084,7 @@
             sel.setAttribute("width", Math.max(bodyW + noteVisualW, 48) + 20);
             sel.setAttribute("height", node.h - 4);
             sel.setAttribute("rx", 4);
-            sel.setAttribute("fill", "#f0f0f0");
+            sel.setAttribute("fill", "var(--map-sel)");
             group.appendChild(sel);
           }
 
@@ -1952,7 +2125,7 @@
               iconLabel.setAttribute("dy", (iconSize * 0.08).toFixed(2));
             } else {
               iconLabel.textContent = "○";
-              iconLabel.setAttribute("fill", "#bbb");
+              iconLabel.setAttribute("fill", "var(--map-faint)");
               iconLabel.setAttribute("font-family", sans);
               iconLabel.setAttribute("font-size", 12);
             }
@@ -1984,7 +2157,7 @@
               sub.setAttribute("x", textX);
               sub.setAttribute("y", subY);
               sub.setAttribute("dominant-baseline", "central");
-              sub.setAttribute("fill", "#888");
+              sub.setAttribute("fill", "var(--map-muted)");
               sub.setAttribute("font-family", sans);
               sub.setAttribute("font-size", DESC_SIZE);
               sub.setAttribute("font-weight", 400);
@@ -2065,7 +2238,7 @@
               sub.setAttribute("x", textX);
               sub.setAttribute("y", subY);
               sub.setAttribute("dominant-baseline", "central");
-              sub.setAttribute("fill", "#888");
+              sub.setAttribute("fill", "var(--map-muted)");
               sub.setAttribute("font-family", sans);
               sub.setAttribute("font-size", DESC_SIZE);
               sub.setAttribute("font-weight", 400);
@@ -2167,10 +2340,10 @@
             paper.setAttribute(
               "fill",
               noteNode === node && notePop.classList.contains("show")
-                ? "#eee"
-                : "#fff",
+                ? "var(--map-paper-active)"
+                : "var(--map-paper)",
             );
-            paper.setAttribute("stroke", "#666");
+            paper.setAttribute("stroke", "var(--map-paper-stroke)");
             paper.setAttribute("stroke-width", 1.2);
             paper.setAttribute("stroke-linejoin", "round");
             noteIcon.appendChild(paper);
@@ -2195,8 +2368,8 @@
             mark.setAttribute("cx", mx);
             mark.setAttribute("cy", my);
             mark.setAttribute("r", 7);
-            mark.setAttribute("fill", "#fff");
-            mark.setAttribute("stroke", "#111");
+            mark.setAttribute("fill", "var(--map-mark-fill)");
+            mark.setAttribute("stroke", "var(--map-ink)");
             mark.setAttribute("stroke-width", 1.2);
             group.appendChild(mark);
             const hline = document.createElementNS(NS, "path");
@@ -2204,7 +2377,7 @@
               "d",
               "M " + (mx - 3.2) + " " + my + " H " + (mx + 3.2),
             );
-            hline.setAttribute("stroke", "#111");
+            hline.setAttribute("stroke", "var(--map-ink)");
             hline.setAttribute("stroke-width", 1.2);
             hline.setAttribute("fill", "none");
             group.appendChild(hline);
@@ -2214,7 +2387,7 @@
                 "d",
                 "M " + mx + " " + (my - 3.2) + " V " + (my + 3.2),
               );
-              vline.setAttribute("stroke", "#111");
+              vline.setAttribute("stroke", "var(--map-ink)");
               vline.setAttribute("stroke-width", 1.2);
               vline.setAttribute("fill", "none");
               group.appendChild(vline);
@@ -2224,7 +2397,7 @@
               count.setAttribute("x", mx + 14);
               count.setAttribute("y", my);
               count.setAttribute("dominant-baseline", "central");
-              count.setAttribute("fill", "#888");
+              count.setAttribute("fill", "var(--map-muted)");
               count.setAttribute("font-family", sans);
               count.setAttribute("font-size", 13);
               count.setAttribute("font-weight", 400);
@@ -2995,6 +3168,9 @@
         const current = modeSwitch.querySelector(`[data-mode="${appMode}"]`);
         if (current) current.focus();
       });
+      themeSelect.addEventListener("change", () => {
+        setTheme(themeSelect.value);
+      });
       fontSelect.addEventListener("change", () => {
         setFont(fontSelect.value);
       });
@@ -3165,6 +3341,8 @@
         setMode: (mode) => setAppMode(mode),
         getFont: () => fontId,
         setFont: (id) => setFont(id),
+        getTheme: () => themeId,
+        setTheme: (id) => setTheme(id),
         undo,
         redo,
         beginEdit: (node, field) => beginEdit(node || selected, field),

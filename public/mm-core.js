@@ -8,6 +8,7 @@ export const STORAGE_KEY = "mm.wenfu.dev/v1";
 export const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
 export const MODE_KEY = "mm.wenfu.dev/mode";
 export const FONT_KEY = "mm.wenfu.dev/font";
+export const THEME_KEY = "mm.wenfu.dev/theme";
 export const DOUBLE_TAP_MS = 350;
 
 /** App mode is either read-only (`view`) or editable (`edit`). Unknown values stay editable. */
@@ -86,16 +87,54 @@ export function fontStacksFor(fontId) {
   return { title: family, body: family };
 }
 
-/** Level styles for layout/draw. Depth 0–2 use title stack; deeper levels use body stack. */
+/** Level styles for layout/draw. Depth 0–2 use title stack; deeper levels use body stack.
+ * Fills use CSS variables so the mindmap follows the active theme. */
 export function buildLevelStyles(fontId) {
   const { title, body } = fontStacksFor(fontId);
   return [
-    { size: 30, weight: 700, family: title, fill: "#111", h: 46 },
-    { size: 22, weight: 700, family: title, fill: "#111", h: 38 },
-    { size: 17, weight: 600, family: title, fill: "#111", h: 34 },
-    { size: 15, weight: 500, family: body, fill: "#111", h: 30 },
-    { size: 14, weight: 400, family: body, fill: "#333", h: 28 },
+    { size: 30, weight: 700, family: title, fill: "var(--map-ink)", h: 46 },
+    { size: 22, weight: 700, family: title, fill: "var(--map-ink)", h: 38 },
+    { size: 17, weight: 600, family: title, fill: "var(--map-ink)", h: 34 },
+    { size: 15, weight: 500, family: body, fill: "var(--map-ink)", h: 30 },
+    { size: 14, weight: 400, family: body, fill: "var(--map-ink-soft)", h: 28 },
   ];
+}
+
+/** Theme preference: light, dark, or follow the OS (`system`). */
+export const THEME_PRESETS = [
+  { id: "system", label: "跟随系统" },
+  { id: "light", label: "浅色" },
+  { id: "dark", label: "深色" },
+];
+
+export function normalizeThemeId(value) {
+  return THEME_PRESETS.some((preset) => preset.id === value) ? value : "system";
+}
+
+export function readThemeId(storage = globalThis.localStorage, key = THEME_KEY) {
+  if (!storage) return "system";
+  try {
+    return normalizeThemeId(storage.getItem(key));
+  } catch {
+    return "system";
+  }
+}
+
+export function writeThemeId(themeId, storage = globalThis.localStorage, key = THEME_KEY) {
+  if (!storage) return false;
+  try {
+    storage.setItem(key, normalizeThemeId(themeId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve preference to a concrete light/dark theme. */
+export function resolveTheme(themeId, prefersDark = false) {
+  const id = normalizeThemeId(themeId);
+  if (id === "light" || id === "dark") return id;
+  return prefersDark ? "dark" : "light";
 }
 
 /** Category-level synonyms only — never item concepts (e.g. heart, fruit, car). */
