@@ -360,14 +360,45 @@ test("shouldConfirmOverwrite when the current map has content", () => {
   assert.equal(shouldConfirmOverwrite(null), false);
 });
 
-test("normalizeDownloadName and buildDownload for markdown", () => {
+test("normalizeDownloadName and buildDownload for common formats", () => {
   assert.equal(normalizeDownloadName("demo.markdown"), "demo.md");
   assert.equal(normalizeDownloadName("a/b:c", ".md"), "a-b-c.md");
-  const tree = parseMarkdown("# Hello\n\n- a\n");
-  const packed = buildDownload(tree, "markdown", "hello");
-  assert.equal(packed.filename, "hello.md");
-  assert.match(packed.content, /^# Hello/m);
-  assert.throws(() => buildDownload(tree, "xmind"), /即将支持/);
+  assert.equal(normalizeDownloadName("demo.opml", ".json"), "demo.json");
+  const tree = parseMarkdown("# Hello\n\n- a\n  note line\n  > memo\n");
+  const md = buildDownload(tree, "markdown", "hello");
+  assert.equal(md.filename, "hello.md");
+  assert.match(md.content, /^# Hello/m);
+
+  const xmind = buildDownload(tree, "xmind", "hello");
+  assert.equal(xmind.filename, "hello.xmind");
+  assert.ok(xmind.content instanceof Uint8Array);
+  assert.equal(xmind.content[0], 0x50); // P
+  assert.equal(xmind.content[1], 0x4b); // K
+  const xmindText = Buffer.from(xmind.content).toString("latin1");
+  assert.match(xmindText, /content\.json/);
+  assert.match(xmindText, /Hello/);
+
+  const html = buildDownload(tree, "html", "hello");
+  assert.equal(html.filename, "hello.html");
+  assert.match(html.content, /<!DOCTYPE html>/);
+  assert.match(html.content, /"title":"Hello"/);
+  assert.match(html.content, /"note":"memo"/);
+  assert.match(html.content, /notePop/);
+  assert.match(html.content, /openNote/);
+  assert.match(html.content, /NOTE_ICON_W/);
+
+  const opml = buildDownload(tree, "opml", "hello");
+  assert.equal(opml.filename, "hello.opml");
+  assert.match(opml.content, /<opml version="2.0">/);
+  assert.match(opml.content, /text="Hello"/);
+
+  const json = buildDownload(tree, "json", "hello");
+  assert.equal(json.filename, "hello.json");
+  const parsed = JSON.parse(json.content);
+  assert.equal(parsed.title, "Hello");
+  assert.equal(parsed.children[0].title, "a");
+
+  assert.throws(() => buildDownload(tree, "pdf"), /未知格式/);
 });
 
 test("countNodes includes the node itself", () => {

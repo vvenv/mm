@@ -362,9 +362,554 @@ export function searchEmojis(query) {
 
 export const DOWNLOAD_FORMATS = [
   { id: "markdown", label: "Markdown", ext: ".md", mime: "text/markdown;charset=utf-8", available: true },
-  { id: "xmind", label: "XMind", ext: ".xmind", mime: "application/vnd.xmind.workbook", available: false },
-  { id: "html", label: "交互 HTML", ext: ".html", mime: "text/html;charset=utf-8", available: false },
+  { id: "xmind", label: "XMind", ext: ".xmind", mime: "application/vnd.xmind.workbook", available: true },
+  { id: "html", label: "交互 HTML", ext: ".html", mime: "text/html;charset=utf-8", available: true },
+  { id: "opml", label: "OPML", ext: ".opml", mime: "text/x-opml;charset=utf-8", available: true },
+  { id: "json", label: "JSON", ext: ".json", mime: "application/json;charset=utf-8", available: true },
 ];
+
+const DOWNLOAD_NAME_EXTS = "md|markdown|txt|html|xmind|opml|json";
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function utf8Encode(text) {
+  return new TextEncoder().encode(String(text));
+}
+
+function u16le(n) {
+  const b = new Uint8Array(2);
+  new DataView(b.buffer).setUint16(0, n, true);
+  return b;
+}
+
+function u32le(n) {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, n, true);
+  return b;
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+/** Build an uncompressed ZIP (STORE). Enough for XMind JSON packages. */
+export function zipStore(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = utf8Encode(entry.name);
+    const data = entry.data instanceof Uint8Array ? entry.data : utf8Encode(entry.data);
+    const crc = crc32(data);
+    const local = concatBytes([
+      u32le(0x04034b50),
+      u16le(20),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u32le(crc),
+      u32le(data.length),
+      u32le(data.length),
+      u16le(nameBytes.length),
+      u16le(0),
+      nameBytes,
+      data,
+    ]);
+    const central = concatBytes([
+      u32le(0x02014b50),
+      u16le(20),
+      u16le(20),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u32le(crc),
+      u32le(data.length),
+      u32le(data.length),
+      u16le(nameBytes.length),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u16le(0),
+      u32le(0),
+      u32le(offset),
+      nameBytes,
+    ]);
+    locals.push(local);
+    centrals.push(central);
+    offset += local.length;
+  }
+  const centralDir = concatBytes(centrals);
+  const end = concatBytes([
+    u32le(0x06054b50),
+    u16le(0),
+    u16le(0),
+    u16le(entries.length),
+    u16le(entries.length),
+    u32le(centralDir.length),
+    u32le(offset),
+    u16le(0),
+  ]);
+  return concatBytes([...locals, centralDir, end]);
+}
+
+function topicTitle(node) {
+  return formatListLabel(node) || "未命名";
+}
+
+function topicNotes(node) {
+  const parts = [];
+  if (node && node.desc) parts.push(String(node.desc));
+  if (node && node.note) parts.push(String(node.note));
+  return parts.join("\n\n");
+}
+
+function toXmindTopic(node, isRoot, nextId) {
+  const item = { id: nextId(), class: "topic", title: topicTitle(node) };
+  if (isRoot) item.structureClass = "org.xmind.ui.logic.right";
+  const notes = topicNotes(node);
+  if (notes) item.notes = { plain: { content: notes } };
+  if (node.children && node.children.length) {
+    item.children = { attached: node.children.map((child) => toXmindTopic(child, false, nextId)) };
+  }
+  return item;
+}
+
+export function toXmindBytes(tree) {
+  let seq = 0;
+  const nextId = () => `t${++seq}`;
+  const sheet = {
+    id: nextId(),
+    class: "sheet",
+    title: tree.title || "Mindmap",
+    rootTopic: toXmindTopic(tree, true, nextId),
+  };
+  const content = JSON.stringify([sheet]);
+  const metadata = JSON.stringify({
+    dataStructureVersion: "2",
+    layoutEngineVersion: "3",
+    creator: { name: "mm.wenfu.dev", version: "1.2.0" },
+  });
+  const manifest = JSON.stringify({
+    "file-entries": { "content.json": {}, "metadata.json": {}, "manifest.json": {} },
+  });
+  return zipStore([
+    { name: "content.json", data: content },
+    { name: "metadata.json", data: metadata },
+    { name: "manifest.json", data: manifest },
+  ]);
+}
+
+function escapeXml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function opmlOutline(node) {
+  const attrs = [`text="${escapeXml(topicTitle(node))}"`];
+  const notes = topicNotes(node);
+  if (notes) attrs.push(`_note="${escapeXml(notes)}"`);
+  const kids = node.children || [];
+  if (!kids.length) return `<outline ${attrs.join(" ")}/>`;
+  const inner = kids.map(opmlOutline).join("");
+  return `<outline ${attrs.join(" ")}>${inner}</outline>`;
+}
+
+export function toOpml(tree) {
+  const title = escapeXml(tree.title || "Mindmap");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>${title}</title>
+  </head>
+  <body>
+    ${opmlOutline(tree)}
+  </body>
+</opml>
+`;
+}
+
+export function toJson(tree) {
+  return `${JSON.stringify(cloneData(tree), null, 2)}\n`;
+}
+
+export function toInteractiveHtml(tree) {
+  const pageTitle = pageTitleOf(tree);
+  const data = JSON.stringify(cloneData(tree)).replace(/</g, "\\u003c");
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(pageTitle)} · 思维导图</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  svg.dragging { cursor: grabbing; }
+  .hint {
+    position: fixed; top: 14px; right: 18px; margin: 0;
+    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #999; pointer-events: none;
+  }
+  .note-pop {
+    position: fixed; z-index: 4; display: none;
+    width: min(320px, calc(100vw - 24px));
+    margin: 0; padding: 0;
+    border: 1px solid #ddd; border-radius: 10px; background: #fff; color: #222;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12); overflow: hidden;
+  }
+  .note-pop.show { display: block; }
+  .note-pop .note-view {
+    margin: 0; padding: 12px 14px; min-height: 72px; max-height: 240px; overflow: auto;
+    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    white-space: pre-wrap; word-break: break-word; color: #333;
+  }
+</style>
+</head>
+<body>
+<svg id="map" role="img" aria-label="${escapeHtml(pageTitle)}思维导图"></svg>
+<p class="hint">点击展开 · 点备注图标查看 · 拖拽移动 · ⌘/Ctrl + 滚轮缩放</p>
+<div class="note-pop" id="notePop" role="dialog" aria-label="备注"><div class="note-view" id="noteView"></div></div>
+<script>
+const tree = ${data};
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const notePop = document.getElementById("notePop");
+const noteView = document.getElementById("noteView");
+const viewport = document.createElementNS(NS, "g");
+svg.appendChild(viewport);
+const GAP_X = 56, GAP_Y = 18, DESC_SIZE = 13, DESC_GAP = 4, NODE_ICON_W = 26, NOTE_ICON_W = 22;
+const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
+const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
+const styles = [
+  { size: 30, weight: 700, family: song, fill: "#111", h: 46 },
+  { size: 22, weight: 700, family: song, fill: "#111", h: 38 },
+  { size: 17, weight: 600, family: song, fill: "#111", h: 34 },
+  { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
+  { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
+];
+let noteNode = null;
+function walk(node, depth, visit) {
+  visit(node, depth);
+  (node.children || []).forEach((child) => walk(child, depth + 1, visit));
+}
+function prepare(node) {
+  walk(node, 0, (item, depth) => {
+    item.depth = depth;
+    if (item.open === undefined) item.open = depth < 2;
+  });
+}
+const measure = document.createElement("canvas").getContext("2d");
+function textWidth(text, font) {
+  measure.font = font;
+  return Math.ceil(measure.measureText(text).width);
+}
+function descText(node) { return node && node.desc ? String(node.desc).trim() : ""; }
+function noteText(node) { return node && node.note != null ? String(node.note) : ""; }
+function nodeHasNote(node) { return !!(node && String(node.note || "").trim()); }
+function iconText(node) { return node && node.icon ? String(node.icon).trim() : ""; }
+function screenPoint(x, y) { return { x: tx + x * scale, y: ty + y * scale }; }
+function hideNotePop() {
+  noteNode = null;
+  notePop.classList.remove("show");
+}
+function positionNotePop(anchor) {
+  const pad = 8;
+  const width = notePop.offsetWidth || 280;
+  const height = notePop.offsetHeight || 160;
+  let left = anchor.left;
+  let top = anchor.bottom + 8;
+  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
+  if (top + height > window.innerHeight - pad) top = Math.max(pad, anchor.top - height - 8);
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  notePop.style.left = left + "px";
+  notePop.style.top = top + "px";
+}
+function openNote(node, event) {
+  if (!node || !nodeHasNote(node)) return;
+  noteNode = node;
+  noteView.textContent = noteText(node);
+  notePop.classList.add("show");
+  const pt = event
+    ? { left: event.clientX, top: event.clientY, bottom: event.clientY }
+    : (() => {
+        const x = node.x + node.iconW + node.labelW + 4;
+        const y = node.y + node.h / 2;
+        const sp = screenPoint(x, y);
+        return { left: sp.x, top: sp.y - 10, bottom: sp.y + 10 };
+      })();
+  positionNotePop(pt);
+  draw();
+}
+function layout(node) {
+  const depth = Math.min(node.depth, styles.length - 1);
+  node.style = styles[depth];
+  const title = node.title || " ";
+  const desc = descText(node);
+  node.labelW = textWidth(title, node.style.weight + " " + node.style.size + "px " + node.style.family);
+  if (desc) {
+    node.labelW = Math.max(node.labelW, textWidth(desc, "400 " + DESC_SIZE + "px " + sans));
+    node.h = node.style.h + DESC_SIZE + DESC_GAP;
+  } else node.h = node.style.h;
+  node.hasChildren = !!(node.children && node.children.length);
+  node.marker = node.hasChildren && !node.open ? node.children.length : 0;
+  node.markerW = node.hasChildren
+    ? 24 + (node.marker ? textWidth(String(node.marker), "400 13px " + sans) + 8 : 0)
+    : 0;
+  node.iconW = NODE_ICON_W;
+  node.noteW = nodeHasNote(node) ? NOTE_ICON_W : 0;
+  node.w = node.iconW + node.labelW + node.noteW + node.markerW;
+  if (!node.open || !node.hasChildren) { node.subtreeH = node.h; return; }
+  node.children.forEach(layout);
+  const inner = node.children.reduce((s, c) => s + c.subtreeH, 0) + GAP_Y * (node.children.length - 1);
+  node.subtreeH = Math.max(node.h, inner);
+}
+function place(node, x, top) {
+  node.x = x;
+  if (!node.open || !node.hasChildren) { node.y = top + (node.subtreeH - node.h) / 2; return; }
+  const inner = node.children.reduce((s, c) => s + c.subtreeH, 0) + GAP_Y * (node.children.length - 1);
+  let y = top + (node.subtreeH - inner) / 2;
+  node.children.forEach((child) => { place(child, x + node.w + GAP_X, y); y += child.subtreeH + GAP_Y; });
+  const first = node.children[0], last = node.children[node.children.length - 1];
+  node.y = (first.y + first.h / 2 + last.y + last.h / 2) / 2 - node.h / 2;
+}
+let tx = 48, ty = 36, scale = 1;
+function apply() { viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + scale + ")"); }
+function draw() {
+  viewport.replaceChildren();
+  const links = document.createElementNS(NS, "g");
+  const nodes = document.createElementNS(NS, "g");
+  viewport.append(links, nodes);
+  function visit(node) {
+    if (node.open) node.children.forEach((child) => {
+      const x1 = node.x + node.w, y1 = node.y + node.h / 2, x2 = child.x, y2 = child.y + child.h / 2;
+      const bend = Math.max(20, (x2 - x1) * 0.46);
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", "M " + x1 + " " + y1 + " C " + (x1 + bend) + " " + y1 + ", " + (x2 - bend) + " " + y2 + ", " + x2 + " " + y2);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "#111");
+      path.setAttribute("stroke-width", node.depth === 0 ? 1.6 : 1);
+      links.appendChild(path);
+      visit(child);
+    });
+    const group = document.createElementNS(NS, "g");
+    group.style.cursor = node.hasChildren ? "pointer" : "default";
+    const layoutHasSub = node.h > node.style.h;
+    const contentH = layoutHasSub ? node.style.size + DESC_GAP + DESC_SIZE : node.style.size;
+    const contentTop = node.y + (node.h - contentH) / 2;
+    const titleY = contentTop + node.style.size / 2;
+    const textX = node.x + node.iconW;
+    if (noteNode === node) {
+      const sel = document.createElementNS(NS, "rect");
+      sel.setAttribute("x", node.x - 10);
+      sel.setAttribute("y", node.y + 2);
+      sel.setAttribute("width", Math.max(node.iconW + node.labelW + (node.noteW ? 16 : 0), 48) + 20);
+      sel.setAttribute("height", node.h - 4);
+      sel.setAttribute("rx", 4);
+      sel.setAttribute("fill", "#f0f0f0");
+      group.appendChild(sel);
+    }
+    const hit = document.createElementNS(NS, "rect");
+    hit.setAttribute("x", node.x - 8); hit.setAttribute("y", node.y);
+    hit.setAttribute("width", node.w + 16); hit.setAttribute("height", node.h);
+    hit.setAttribute("fill", "transparent");
+    group.appendChild(hit);
+    const icon = document.createElementNS(NS, "text");
+    icon.setAttribute("x", node.x + node.iconW / 2 - 1);
+    icon.setAttribute("y", titleY);
+    icon.setAttribute("text-anchor", "middle");
+    icon.setAttribute("dominant-baseline", "central");
+    if (iconText(node)) { icon.textContent = iconText(node); icon.setAttribute("font-size", Math.max(14, Math.min(18, node.style.size - 2))); }
+    else { icon.textContent = "○"; icon.setAttribute("fill", "#bbb"); icon.setAttribute("font-family", sans); icon.setAttribute("font-size", 12); }
+    group.appendChild(icon);
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("x", textX); label.setAttribute("y", titleY);
+    label.setAttribute("dominant-baseline", "central");
+    label.setAttribute("fill", node.style.fill);
+    label.setAttribute("font-family", node.style.family);
+    label.setAttribute("font-size", node.style.size);
+    label.setAttribute("font-weight", node.style.weight);
+    label.textContent = node.title;
+    group.appendChild(label);
+    if (descText(node)) {
+      const sub = document.createElementNS(NS, "text");
+      sub.setAttribute("x", textX);
+      sub.setAttribute("y", contentTop + node.style.size + DESC_GAP + DESC_SIZE / 2);
+      sub.setAttribute("dominant-baseline", "central");
+      sub.setAttribute("fill", "#888");
+      sub.setAttribute("font-family", sans);
+      sub.setAttribute("font-size", DESC_SIZE);
+      sub.textContent = descText(node);
+      group.appendChild(sub);
+    }
+    if (node.noteW) {
+      const nx = node.x + node.iconW + node.labelW + 11;
+      const ny = node.y + node.h / 2;
+      const noteIcon = document.createElementNS(NS, "g");
+      noteIcon.style.cursor = "pointer";
+      const noteHit = document.createElementNS(NS, "circle");
+      noteHit.setAttribute("cx", nx); noteHit.setAttribute("cy", ny); noteHit.setAttribute("r", 10);
+      noteHit.setAttribute("fill", "transparent");
+      noteIcon.appendChild(noteHit);
+      const paper = document.createElementNS(NS, "path");
+      paper.setAttribute("d", "M " + (nx - 5) + " " + (ny - 6) + " h 7 l 3 3 v 9 h -10 z M " + (nx + 2) + " " + (ny - 6) + " v 3 h 3");
+      paper.setAttribute("fill", noteNode === node ? "#eee" : "#fff");
+      paper.setAttribute("stroke", "#666");
+      paper.setAttribute("stroke-width", 1.2);
+      paper.setAttribute("stroke-linejoin", "round");
+      noteIcon.appendChild(paper);
+      noteIcon.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        openNote(node, event);
+      });
+      group.appendChild(noteIcon);
+    }
+    if (node.hasChildren) {
+      const mx = node.x + node.iconW + node.labelW + (node.noteW || 0) + 16, my = node.y + node.h / 2;
+      const mark = document.createElementNS(NS, "circle");
+      mark.setAttribute("cx", mx); mark.setAttribute("cy", my); mark.setAttribute("r", 7);
+      mark.setAttribute("fill", "#fff"); mark.setAttribute("stroke", "#111"); mark.setAttribute("stroke-width", 1.2);
+      group.appendChild(mark);
+      const hline = document.createElementNS(NS, "path");
+      hline.setAttribute("d", "M " + (mx - 3.2) + " " + my + " H " + (mx + 3.2));
+      hline.setAttribute("stroke", "#111"); hline.setAttribute("stroke-width", 1.2); hline.setAttribute("fill", "none");
+      group.appendChild(hline);
+      if (!node.open) {
+        const vline = document.createElementNS(NS, "path");
+        vline.setAttribute("d", "M " + mx + " " + (my - 3.2) + " V " + (my + 3.2));
+        vline.setAttribute("stroke", "#111"); vline.setAttribute("stroke-width", 1.2); vline.setAttribute("fill", "none");
+        group.appendChild(vline);
+      }
+      if (node.marker) {
+        const count = document.createElementNS(NS, "text");
+        count.setAttribute("x", mx + 14); count.setAttribute("y", my);
+        count.setAttribute("dominant-baseline", "central");
+        count.setAttribute("fill", "#888"); count.setAttribute("font-family", sans); count.setAttribute("font-size", 13);
+        count.textContent = String(node.marker);
+        group.appendChild(count);
+      }
+    }
+    group.addEventListener("pointerdown", (event) => { event.stopPropagation(); armDrag(event, node); });
+    nodes.appendChild(group);
+  }
+  visit(tree); apply();
+}
+function relayout(anchor) {
+  const before = anchor ? anchor.y : 0;
+  layout(tree); place(tree, 0, 0);
+  if (anchor) ty += (before - anchor.y) * scale;
+  draw();
+}
+let drag = null;
+function armDrag(event, node) {
+  hideNotePop();
+  drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node };
+  svg.setPointerCapture(event.pointerId);
+}
+svg.addEventListener("pointerdown", (event) => armDrag(event, null));
+svg.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+  drag.moved = true; svg.classList.add("dragging");
+  tx = drag.tx + dx; ty = drag.ty + dy; apply();
+});
+function endDrag() {
+  if (drag && !drag.moved && drag.node && drag.node.hasChildren) {
+    drag.node.open = !drag.node.open; relayout(drag.node);
+  }
+  drag = null; svg.classList.remove("dragging");
+}
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", () => { drag = null; svg.classList.remove("dragging"); });
+svg.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  hideNotePop();
+  if (event.ctrlKey || event.metaKey) {
+    const next = Math.min(2.4, Math.max(0.35, scale * (event.deltaY < 0 ? 1.08 : 0.92)));
+    const rect = svg.getBoundingClientRect();
+    const px = event.clientX - rect.left, py = event.clientY - rect.top;
+    tx = px - ((px - tx) * next) / scale; ty = py - ((py - ty) * next) / scale; scale = next;
+  } else { tx -= event.deltaX; ty -= event.deltaY; }
+  apply();
+}, { passive: false });
+window.addEventListener("pointerdown", (event) => {
+  if (notePop.classList.contains("show") && !notePop.contains(event.target)) hideNotePop();
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && notePop.classList.contains("show")) {
+    event.preventDefault();
+    hideNotePop();
+    draw();
+  }
+});
+notePop.addEventListener("pointerdown", (event) => event.stopPropagation());
+function bounds() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  (function scan(node) {
+    minX = Math.min(minX, node.x); minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.w); maxY = Math.max(maxY, node.y + node.h);
+    if (node.open) node.children.forEach(scan);
+  })(tree);
+  return { minX, minY, w: maxX - minX, h: maxY - minY };
+}
+function frame() {
+  layout(tree); place(tree, 0, 0);
+  const box = bounds(), pad = 40;
+  const fitW = (window.innerWidth - pad * 2) / Math.max(box.w, 1);
+  const fitH = (window.innerHeight - pad * 2) / Math.max(box.h, 1);
+  const fit = Math.min(fitW, fitH);
+  scale = Math.min(1, fit >= 0.78 ? fit : fitW);
+  tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
+  const fittedH = box.h * scale;
+  ty = fittedH < window.innerHeight - pad
+    ? (window.innerHeight - fittedH) / 2 - box.minY * scale
+    : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
+  draw();
+}
+prepare(tree); frame();
+window.addEventListener("resize", () => { hideNotePop(); frame(); });
+</script>
+</body>
+</html>
+`;
+}
 
 export function indentWidth(prefix) {
   let width = 0;
@@ -566,7 +1111,7 @@ export function shouldConfirmOverwrite(tree) {
 
 export function normalizeDownloadName(name, ext = ".md") {
   const raw = String(name || "mindmap").trim() || "mindmap";
-  const base = raw.replace(/\.(md|markdown|txt|html|xmind)$/i, "");
+  const base = raw.replace(new RegExp(`\\.(?:${DOWNLOAD_NAME_EXTS})$`, "i"), "");
   const safe = base.replace(/[\\/:*?"<>|]+/g, "-").trim() || "mindmap";
   return safe + ext;
 }
@@ -576,12 +1121,21 @@ export function buildDownload(tree, formatId = "markdown", name) {
   if (!format || !format.available) {
     throw new Error(format ? `${format.label} 即将支持` : "未知格式");
   }
+  const filename = normalizeDownloadName(name || tree.title, format.ext);
   if (format.id === "markdown") {
-    return {
-      filename: normalizeDownloadName(name || tree.title, format.ext),
-      mime: format.mime,
-      content: toMarkdown(tree),
-    };
+    return { filename, mime: format.mime, content: toMarkdown(tree) };
+  }
+  if (format.id === "xmind") {
+    return { filename, mime: format.mime, content: toXmindBytes(tree) };
+  }
+  if (format.id === "html") {
+    return { filename, mime: format.mime, content: toInteractiveHtml(tree) };
+  }
+  if (format.id === "opml") {
+    return { filename, mime: format.mime, content: toOpml(tree) };
+  }
+  if (format.id === "json") {
+    return { filename, mime: format.mime, content: toJson(tree) };
   }
   throw new Error(`${format.label} 即将支持`);
 }

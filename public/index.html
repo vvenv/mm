@@ -1026,7 +1026,7 @@
         writeFontId,
         shouldConfirmOverwrite,
         toMarkdown,
-      } from "./mm-core.js?v=20261102o";
+      } from "./mm-core.js?v=20261102q";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1071,7 +1071,7 @@
             icon: "⚙️",
             open: true,
             children: [
-              { title: "导出可选文件名", desc: "当前仅 Markdown", children: [] },
+              { title: "导出可选格式", desc: "Markdown · XMind · HTML · OPML · JSON", children: [] },
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
             ],
@@ -2838,7 +2838,7 @@
       function openDownload() {
         if (editing) commitEdit(true);
         downloadName.value = (fileName || tree.title || "mindmap").replace(
-          /\.(md|markdown|txt|html|xmind)$/i,
+          /\.(md|markdown|txt|html|xmind|opml|json)$/i,
           "",
         );
         downloadFormat.value = "markdown";
