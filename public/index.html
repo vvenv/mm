@@ -1679,6 +1679,9 @@
               return { left: pt.x, top: pt.y - 12, bottom: pt.y + 12 };
             })();
         positionIconPop(anchor);
+        requestAnimationFrame(() => {
+          iconSearch.focus();
+        });
         updateChrome();
         draw();
       }
