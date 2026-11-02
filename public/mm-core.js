@@ -602,7 +602,7 @@ export function toInteractiveHtml(tree) {
 </head>
 <body>
 <svg id="map" role="img" aria-label="${escapeHtml(pageTitle)}思维导图"></svg>
-<p class="hint">点击展开 · 点备注图标查看 · 拖拽移动 · ⌘/Ctrl + 滚轮或 +/- 缩放</p>
+<p class="hint">点击展开 · 点备注图标查看 · 拖拽移动 · ⌘/Ctrl + 滚轮或 +/- 缩放 · ⌘0 适应</p>
 <div class="note-pop" id="notePop" role="dialog" aria-label="备注"><div class="note-view" id="noteView"></div></div>
 <script>
 const tree = ${data};
@@ -885,11 +885,17 @@ window.addEventListener("keydown", (event) => {
     (event.key === "=" ||
       event.key === "+" ||
       event.key === "-" ||
+      event.key === "0" ||
       event.code === "NumpadAdd" ||
-      event.code === "NumpadSubtract")
+      event.code === "NumpadSubtract" ||
+      event.code === "Numpad0")
   ) {
     event.preventDefault();
     hideNotePop();
+    if (event.key === "0" || event.code === "Numpad0") {
+      frame();
+      return;
+    }
     const zoomIn =
       event.key === "=" || event.key === "+" || event.code === "NumpadAdd";
     const next = Math.min(2.4, Math.max(0.35, scale * (zoomIn ? 1.2 : 1 / 1.2)));

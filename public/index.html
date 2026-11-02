@@ -1083,6 +1083,7 @@
               { title: "拖动平移", children: [] },
               { title: "⌘/Ctrl + 滚轮缩放", children: [] },
               { title: "⌘/Ctrl + +/- 缩放", children: [] },
+              { title: "⌘/Ctrl + 0 适应画布", children: [] },
               { title: "手机双指捏合缩放", children: [] },
             ],
           },
@@ -2745,10 +2746,16 @@
           (event.key === "=" ||
             event.key === "+" ||
             event.key === "-" ||
+            event.key === "0" ||
             event.code === "NumpadAdd" ||
-            event.code === "NumpadSubtract")
+            event.code === "NumpadSubtract" ||
+            event.code === "Numpad0")
         ) {
           event.preventDefault();
+          if (event.key === "0" || event.code === "Numpad0") {
+            frame();
+            return;
+          }
           const zoomIn =
             event.key === "=" ||
             event.key === "+" ||
