@@ -6,9 +6,15 @@
     <title>Markdown Mindmap</title>
     <meta
       name="description"
-      content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、导入导出。"
+      content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、离线使用、导入导出。"
     />
     <link rel="canonical" href="https://mm.wenfu.dev/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="mm" />
     <style>
       html,
       body {
@@ -1026,7 +1032,7 @@
         writeFontId,
         shouldConfirmOverwrite,
         toMarkdown,
-      } from "./mm-core.js?v=20261102r";
+      } from "./mm-core.js?v=20261102o";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1074,6 +1080,7 @@
               { title: "导出可选格式", desc: "Markdown · XMind · HTML · OPML · JSON", children: [] },
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
+              { title: "首次打开后可离线使用", children: [] },
             ],
           },
           {
@@ -3117,6 +3124,10 @@
           return result.action;
         },
       };
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
     </script>
   </body>
 </html>

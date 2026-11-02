@@ -1,0 +1,19 @@
+{
+  "name": "Markdown Mindmap",
+  "short_name": "mm",
+  "description": "把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、离线使用、导入导出。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
