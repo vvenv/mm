@@ -2,10 +2,10 @@
 
 import { EMOJI_CATEGORIES, EMOJI_KEYWORDS } from "./emoji-data.js";
 
-export { EMOJI_CATEGORIES, EMOJI_KEYWORDS };
+export { EMOJI_CATEGORIES };
 
-export const STORAGE_KEY = "mm.wenfu.dev/v1";
-export const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
+const STORAGE_KEY = "mm.wenfu.dev/v1";
+const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
 export const MODE_KEY = "mm.wenfu.dev/mode";
 export const FONT_KEY = "mm.wenfu.dev/font";
 export const THEME_KEY = "mm.wenfu.dev/theme";
@@ -242,7 +242,7 @@ function concatBytes(parts) {
 }
 
 /** Build an uncompressed ZIP (STORE). Enough for XMind JSON packages. */
-export function zipStore(entries) {
+function zipStore(entries) {
   const locals = [];
   const centrals = [];
   let offset = 0;
@@ -325,7 +325,7 @@ function toXmindTopic(node, isRoot, nextId) {
   return item;
 }
 
-export function toXmindBytes(tree) {
+function toXmindBytes(tree) {
   let seq = 0;
   const nextId = () => `t${++seq}`;
   const sheet = {
@@ -377,7 +377,7 @@ function opmlOutline(node) {
   return `<outline ${attrs.join(" ")}>${inner}</outline>`;
 }
 
-export function toOpml(tree) {
+function toOpml(tree) {
   const title = escapeXml(tree.title || "Mindmap");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <opml version="2.0">
@@ -391,11 +391,11 @@ export function toOpml(tree) {
 `;
 }
 
-export function toJson(tree) {
+function toJson(tree) {
   return `${JSON.stringify(cloneData(tree), null, 2)}\n`;
 }
 
-export function toInteractiveHtml(tree) {
+function toInteractiveHtml(tree) {
   const pageTitle = pageTitleOf(tree);
   const data = JSON.stringify(cloneData(tree)).replace(/</g, "\\u003c");
   return `<!DOCTYPE html>
@@ -772,7 +772,7 @@ window.addEventListener("resize", () => { hideNotePop(); frame(); });
 `;
 }
 
-export function indentWidth(prefix) {
+function indentWidth(prefix) {
   let width = 0;
   for (const ch of prefix) width += ch === "\t" ? 2 : 1;
   return width;
@@ -934,7 +934,6 @@ export function cloneData(node) {
 
 export function createRecentIconsStore(storage = globalThis.localStorage, key = RECENT_ICONS_KEY, limit = 24) {
   return {
-    key,
     load() {
       if (!storage) return [];
       try {
@@ -1003,7 +1002,6 @@ export function buildDownload(tree, formatId = "markdown", name) {
 
 export function createLocalStore(storage = globalThis.localStorage, key = STORAGE_KEY) {
   return {
-    key,
     save(fileName, tree) {
       if (!storage) return false;
       storage.setItem(
@@ -1099,9 +1097,6 @@ export function createHistory(limit = 80) {
     clear() {
       undoStack.length = 0;
       redoStack.length = 0;
-    },
-    sizes() {
-      return { undo: undoStack.length, redo: redoStack.length };
     },
   };
 }

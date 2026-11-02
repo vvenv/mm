@@ -1,6 +1,6 @@
 /* Markdown Mindmap service worker — app-shell offline cache.
  * Bump CACHE whenever public assets change (keep in sync with ?v= in index.html). */
-const CACHE = "mm-20261102p";
+const CACHE = "mm-20261102r";
 const ASSETS = [
   "/",
   "/index.html",

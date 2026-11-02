@@ -1159,8 +1159,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-        toMarkdown,
-      } from "./mm-core.js?v=20261102q";
+      } from "./mm-core.js?v=20261102r";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1570,13 +1569,6 @@
         ctxMenu.querySelector('[data-act="child"]').disabled = !has;
         ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
         ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
-      }
-
-      function selectNode(node) {
-        if (editing) commitEdit(true);
-        selected = node || null;
-        updateChrome();
-        draw();
       }
 
       const measureCanvas = document.createElement("canvas").getContext("2d");
