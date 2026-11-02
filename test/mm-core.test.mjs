@@ -16,11 +16,17 @@ import {
   searchEmojis,
   formatListLabel,
   nodeAtPath,
+  FONT_KEY,
+  FONT_PRESETS,
   MODE_KEY,
+  buildLevelStyles,
+  fontStacksFor,
   normalizeAppMode,
   normalizeDownloadName,
+  normalizeFontId,
   parseMarkdown,
   readAppMode,
+  readFontId,
   parseTitleSubtitle,
   pathToNode,
   recognizeNodeTap,
@@ -28,6 +34,7 @@ import {
   splitLeadingIcon,
   toMarkdown,
   writeAppMode,
+  writeFontId,
 } from "../public/mm-core.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +49,7 @@ test("parseMarkdown builds tree from headings and indented lists", () => {
 - B
 `);
   assert.equal(tree.title, "Root");
-  assert.equal(tree.subtitle, "Sub");
+  assert.equal(tree.desc, "Sub");
   assert.deepEqual(
     tree.children.map((c) => c.title),
     ["A", "B"],
@@ -65,19 +72,19 @@ test("toMarkdown round-trips with parseMarkdown", () => {
   const again = toMarkdown(parseMarkdown(source));
   const tree = parseMarkdown(again);
   assert.equal(tree.title, "人机协同");
-  assert.equal(tree.subtitle, "副标题");
+  assert.equal(tree.desc, "副标题");
   assert.equal(tree.children.length, 2);
   assert.equal(tree.children[0].children[0].children[0].title, "副驾驶");
 });
 
 test("parseTitleSubtitle splits on first ::", () => {
-  assert.deepEqual(parseTitleSubtitle("主驾驶 :: 人审关键"), { title: "主驾驶", subtitle: "人审关键" });
-  assert.deepEqual(parseTitleSubtitle("只有标题"), { title: "只有标题", subtitle: "" });
-  assert.deepEqual(parseTitleSubtitle("a :: b :: c"), { title: "a", subtitle: "b :: c" });
-  assert.equal(formatListLabel({ title: "主驾驶", subtitle: "人审关键" }), "主驾驶 :: 人审关键");
+  assert.deepEqual(parseTitleSubtitle("主驾驶 :: 人审关键"), { title: "主驾驶", desc: "人审关键" });
+  assert.deepEqual(parseTitleSubtitle("只有标题"), { title: "只有标题", desc: "" });
+  assert.deepEqual(parseTitleSubtitle("a :: b :: c"), { title: "a", desc: "b :: c" });
+  assert.equal(formatListLabel({ title: "主驾驶", desc: "人审关键" }), "主驾驶 :: 人审关键");
 });
 
-test("list item subtitle round-trips via ::", () => {
+test("list item desc round-trips via ::", () => {
   const source = `# Root
 ## Root sub
 
@@ -86,16 +93,16 @@ test("list item subtitle round-trips via ::", () => {
 - 普通
 `;
   const tree = parseMarkdown(source);
-  assert.equal(tree.subtitle, "Root sub");
+  assert.equal(tree.desc, "Root sub");
   assert.equal(tree.children[0].title, "主驾驶");
-  assert.equal(tree.children[0].subtitle, "人审关键");
-  assert.equal(tree.children[0].children[0].subtitle, "说明");
-  assert.equal(tree.children[1].subtitle, undefined);
+  assert.equal(tree.children[0].desc, "人审关键");
+  assert.equal(tree.children[0].children[0].desc, "说明");
+  assert.equal(tree.children[1].desc, undefined);
 
   const again = parseMarkdown(toMarkdown(tree));
-  assert.equal(again.children[0].subtitle, "人审关键");
+  assert.equal(again.children[0].desc, "人审关键");
   assert.equal(again.children[0].children[0].title, "子项");
-  assert.equal(again.children[0].children[0].subtitle, "说明");
+  assert.equal(again.children[0].children[0].desc, "说明");
   assert.match(toMarkdown(tree), /- 主驾驶 :: 人审关键/);
 });
 
@@ -115,7 +122,7 @@ test("splitLeadingIcon and icon markdown round-trip", () => {
   assert.equal(tree.title, "Root");
   assert.equal(tree.children[0].icon, "📤");
   assert.equal(tree.children[0].title, "上传");
-  assert.equal(tree.children[0].subtitle, "说明");
+  assert.equal(tree.children[0].desc, "说明");
   assert.equal(formatListLabel(tree.children[0]), "📤 上传 :: 说明");
 
   const again = parseMarkdown(toMarkdown(tree));
@@ -178,51 +185,19 @@ test("node notes round-trip via blockquotes", () => {
   assert.equal(again.children[0].children[0].note, "note B");
 });
 
-test("recognizeNodeTap: first tap selects, second tap within window edits", () => {
+test("recognizeNodeTap: single tap edits title", () => {
   const node = { title: "A" };
-  const first = recognizeNodeTap(null, node, 1000);
-  assert.equal(first.action, "select");
-  assert.equal(first.next.node, node);
-
-  const second = recognizeNodeTap(first.next, node, 1000 + DOUBLE_TAP_MS - 1);
-  assert.equal(second.action, "edit");
-  assert.equal(second.next.node, null);
+  const result = recognizeNodeTap(null, node, 1000);
+  assert.equal(result.action, "edit");
+  assert.equal(result.field, "title");
+  assert.equal(result.next.node, null);
 });
 
-test("recognizeNodeTap: slow second tap selects again (native dblclick would be lost after redraw)", () => {
-  const node = { title: "A" };
-  const first = recognizeNodeTap(null, node, 1000);
-  const second = recognizeNodeTap(first.next, node, 1000 + DOUBLE_TAP_MS + 1);
-  assert.equal(second.action, "select");
-  assert.equal(second.next.time, 1000 + DOUBLE_TAP_MS + 1);
-});
-
-test("recognizeNodeTap: switching nodes starts a new select streak", () => {
-  const a = { title: "A" };
-  const b = { title: "B" };
-  const first = recognizeNodeTap(null, a, 1000);
-  const second = recognizeNodeTap(first.next, b, 1100);
-  assert.equal(second.action, "select");
-  assert.equal(second.next.node, b);
-
-  const third = recognizeNodeTap(second.next, b, 1200);
-  assert.equal(third.action, "edit");
-});
-
-test("recognizeNodeTap: subtitle double-tap edits subtitle and does not complete a title tap", () => {
-  const node = { title: "A", subtitle: "s" };
-  const first = recognizeNodeTap(null, node, 1000, DOUBLE_TAP_MS, "subtitle");
-  assert.equal(first.action, "select");
-  assert.equal(first.field, "subtitle");
-  assert.equal(first.next.field, "subtitle");
-
-  const crossed = recognizeNodeTap(first.next, node, 1100, DOUBLE_TAP_MS, "title");
-  assert.equal(crossed.action, "select");
-  assert.equal(crossed.field, "title");
-
-  const again = recognizeNodeTap(first.next, node, 1100, DOUBLE_TAP_MS, "subtitle");
-  assert.equal(again.action, "edit");
-  assert.equal(again.field, "subtitle");
+test("recognizeNodeTap: single tap edits desc", () => {
+  const node = { title: "A", desc: "s" };
+  const result = recognizeNodeTap(null, node, 1000, DOUBLE_TAP_MS, "desc");
+  assert.equal(result.action, "edit");
+  assert.equal(result.field, "desc");
 });
 
 test("app mode persists as view or edit", () => {
@@ -240,6 +215,33 @@ test("app mode persists as view or edit", () => {
   assert.equal(readAppMode(storage), "view");
   writeAppMode("edit", storage);
   assert.equal(readAppMode(storage), "edit");
+});
+
+test("global font persists and drives level styles", () => {
+  assert.equal(normalizeFontId("kai"), "kai");
+  assert.equal(normalizeFontId("nope"), "default");
+  assert.ok(FONT_PRESETS.some((preset) => preset.id === "hei"));
+
+  const defaults = fontStacksFor("default");
+  assert.notEqual(defaults.title, defaults.body);
+  const kai = fontStacksFor("kai");
+  assert.equal(kai.title, kai.body);
+  assert.match(kai.title, /Kaiti/);
+
+  const styles = buildLevelStyles("hei");
+  assert.equal(styles.length, 5);
+  assert.equal(styles[0].family, styles[4].family);
+  assert.match(styles[0].family, /PingFang/);
+
+  const memory = new Map();
+  const storage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+  };
+  assert.equal(readFontId(storage), "default");
+  assert.equal(writeFontId("song", storage), true);
+  assert.equal(storage.getItem(FONT_KEY), "song");
+  assert.equal(readFontId(storage), "song");
 });
 
 test("createLocalStore persists and restores tree", () => {
@@ -263,9 +265,8 @@ test("createLocalStore persists and restores tree", () => {
 });
 
 /**
- * Documents the production bug: selecting redraws SVG and replaces the node
- * element, so a browser `dblclick` on the original target never fires.
- * Interaction must use recognizeNodeTap instead of native dblclick.
+ * Documents why interaction must not rely on native dblclick: selecting
+ * redraws SVG and replaces the node element.
  */
 test("index.html wires recognizeNodeTap and does not rely on native dblclick", () => {
   const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
@@ -281,13 +282,18 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /LONG_PRESS_MS/);
   assert.match(html, /isSecondaryPointer/);
   assert.match(html, /data-node-path/);
-  assert.match(html, /data-act="subtitle"/);
-  assert.match(html, /beginEdit\(selected, "subtitle"\)/);
+  assert.match(html, /data-act="desc"/);
+  assert.match(html, /beginEdit\(selected, "desc"\)/);
   assert.match(html, /id="modeSwitch"/);
   assert.match(html, /data-mode="view"/);
   assert.match(html, /data-mode="edit"/);
+  assert.match(html, /id="fontSelect"/);
+  assert.match(html, /FONT_PRESETS/);
+  assert.match(html, /buildLevelStyles/);
+  assert.match(html, /readFontId/);
+  assert.match(html, /writeFontId/);
   assert.match(html, /armLongPress/);
-  assert.match(html, /data-field", "subtitle"/);
+  assert.match(html, /data-field", "desc"/);
   assert.match(html, /readAppMode/);
   assert.match(html, /beginEdit\(drag\.node, field\)/);
   assert.match(html, /nodeShowsSubtitle/);
@@ -375,9 +381,8 @@ test("selection redraw invalidates native dblclick targets", () => {
   ]);
   assert.ok(!events.some((e) => e.type === "dblclick"));
 
-  // app-level recognizer still sees the same logical node
+  // app-level recognizer edits on a single logical click
   const logical = { title: "同一节点" };
-  const a = recognizeNodeTap(null, logical, 1);
-  const b = recognizeNodeTap(a.next, logical, 2);
-  assert.equal(b.action, "edit");
+  const result = recognizeNodeTap(null, logical, 1);
+  assert.equal(result.action, "edit");
 });

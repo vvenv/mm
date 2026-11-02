@@ -6,7 +6,7 @@
     <title>Markdown Mindmap</title>
     <meta
       name="description"
-      content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、上传下载。"
+      content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、导入导出。"
     />
     <link rel="canonical" href="https://mm.wenfu.dev/" />
     <style>
@@ -37,16 +37,9 @@
         gap: 8px;
         align-items: center;
       }
-      .brand {
-        margin: 0 6px 0 0;
-        font:
-          700 15px/1 "Songti SC",
-          "STSongti-SC-Regular",
-          "Noto Serif SC",
-          serif;
-        letter-spacing: 0.02em;
-        color: #111;
-        user-select: none;
+      .toolbar.toolbar-end {
+        left: auto;
+        right: 14px;
       }
       .toolbar button,
       .ctx-menu button,
@@ -104,7 +97,7 @@
         height: 30px;
         padding: 2px;
         border-radius: 8px;
-        background: #f3f3f3;
+        background: #f7f7f7;
       }
       .toolbar .mode-switch button {
         height: 26px;
@@ -148,13 +141,10 @@
         -webkit-user-select: none;
         user-select: none;
       }
-      .help {
-        position: fixed;
-        top: 12px;
-        right: 14px;
-        z-index: 2;
+      .settings {
+        position: relative;
       }
-      .help > button.icon {
+      .settings > button.icon {
         margin: 0;
         padding: 0;
         width: 34px;
@@ -168,22 +158,23 @@
         justify-content: center;
         cursor: pointer;
       }
-      .help > button.icon:hover {
+      .settings > button.icon:hover {
         background: #f3f3f3;
       }
-      .help > button.icon svg {
+      .settings > button.icon svg {
         width: 16px;
         height: 16px;
         display: block;
       }
-      .help-tip {
+      .settings-panel {
         position: absolute;
         top: calc(100% + 8px);
         right: 0;
         width: max-content;
+        min-width: 200px;
         max-width: min(280px, calc(100vw - 28px));
         margin: 0;
-        padding: 10px 12px;
+        padding: 12px;
         border: 1px solid #ddd;
         border-radius: 8px;
         background: #fff;
@@ -202,13 +193,48 @@
           transform 0.15s,
           visibility 0.15s;
       }
-      .help-tip ul {
-        margin: 0;
-        padding: 0 0 0 1.1em;
+      .settings.open .settings-panel {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
       }
-      .help-tip li {
+      .settings-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .settings-row > span {
+        flex: 0 0 auto;
+        color: #666;
+        white-space: nowrap;
+      }
+      .settings-row select {
+        appearance: none;
+        -webkit-appearance: none;
+        flex: 1 1 auto;
         margin: 0;
-        padding: 2px 0;
+        padding: 0 26px 0 10px;
+        height: 30px;
+        min-width: 0;
+        border: 0;
+        border-radius: 8px;
+        background: #f7f7f7
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")
+          no-repeat right 8px center;
+        color: #111;
+        font:
+          13px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        cursor: pointer;
+      }
+      .settings-row select:hover {
+        background-color: #f0f0f0;
+      }
+      .settings-row select:focus-visible {
+        outline: 2px solid #111;
+        outline-offset: 1px;
       }
       .note-pop {
         position: fixed;
@@ -240,17 +266,11 @@
         white-space: pre-wrap;
         word-break: break-word;
         color: #333;
-        cursor: text;
-      }
-      .note-pop .note-view:empty::before {
-        content: "暂无备注，双击或长按编辑";
-        color: #aaa;
-      }
-      body[data-mode="view"] .note-pop .note-view {
         cursor: default;
       }
-      body[data-mode="view"] .note-pop .note-view:empty::before {
+      .note-pop .note-view:empty::before {
         content: "暂无备注";
+        color: #aaa;
       }
       .note-pop .note-edit {
         display: none;
@@ -448,13 +468,6 @@
       .icon-pop .icon-foot button:hover {
         border-color: #999;
       }
-      .help:hover .help-tip,
-      .help:focus-within .help-tip,
-      .help.open .help-tip {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
-      }
       .toast {
         position: fixed;
         left: 50%;
@@ -502,14 +515,15 @@
         width: 100%;
         height: 100%;
         margin: 0;
-        padding: 0 4px;
+        padding: 0 2px;
         box-sizing: border-box;
-        border: 1.5px solid #111;
-        border-radius: 4px;
+        border: 1px solid #111;
+        border-radius: 3px;
         outline: none;
         background: #fff;
         color: #111;
         font: inherit;
+        line-height: 1;
       }
       .ctx-menu {
         position: fixed;
@@ -557,8 +571,15 @@
         height: 16px;
         flex: 0 0 auto;
       }
-      .ctx-menu button span {
+      .ctx-menu button span:first-of-type {
         flex: 1 1 auto;
+      }
+      .ctx-menu button .kbd {
+        flex: 0 0 auto;
+        margin-left: 18px;
+        color: #888;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
       }
       .modal-backdrop {
         position: fixed;
@@ -638,16 +659,10 @@
         border-color: #000;
         background: #222;
       }
-      @media (max-width: 860px) {
-        .brand {
-          display: none;
-        }
-      }
     </style>
   </head>
   <body>
     <div class="toolbar">
-      <span class="brand">mm</span>
       <div
         class="mode-switch"
         id="modeSwitch"
@@ -673,49 +688,6 @@
           编辑
         </button>
       </div>
-      <span class="sep" aria-hidden="true"></span>
-      <button
-        type="button"
-        class="icon"
-        id="uploadBtn"
-        title="上传 Markdown"
-        aria-label="上传"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m17 8-5-5-5 5" />
-          <path d="M12 3v12" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="icon"
-        id="downloadBtn"
-        title="下载"
-        aria-label="下载"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m7 10 5 5 5-5" />
-          <path d="M12 15V3" />
-        </svg>
-      </button>
       <span class="sep" aria-hidden="true"></span>
       <button
         type="button"
@@ -759,21 +731,14 @@
           <path d="M20 9H10a5 5 0 0 0 0 10h1" />
         </svg>
       </button>
-      <input
-        id="fileInput"
-        type="file"
-        accept=".md,.markdown,text/markdown,text/plain"
-      />
     </div>
-    <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
-    <div class="help" id="help">
+    <div class="toolbar toolbar-end">
       <button
         type="button"
         class="icon"
-        id="helpBtn"
-        aria-label="帮助"
-        aria-describedby="helpTip"
-        aria-expanded="false"
+        id="uploadBtn"
+        title="导入 Markdown"
+        aria-label="导入"
       >
         <svg
           viewBox="0 0 24 24"
@@ -784,25 +749,76 @@
           stroke-linejoin="round"
           aria-hidden="true"
         >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-          <path d="M12 17h.01" />
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m17 8-5-5-5 5" />
+          <path d="M12 3v12" />
         </svg>
       </button>
-      <div class="help-tip" id="helpTip" role="tooltip">
-        <ul>
-          <li>工具栏切换只读 / 编辑</li>
-          <li>双击编辑标题；双击或长按副标题</li>
-          <li>右键 / 长按打开菜单</li>
-          <li>菜单可添加副标题（标题 :: 副标题）</li>
-          <li>点击便签图标查看备注；双击或长按内容编辑</li>
-          <li>点击节点前 emoji 更换图标（含最近使用）</li>
-          <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
-          <li>Tab 加子节点</li>
-          <li>Enter 加同级</li>
-        </ul>
+      <button
+        type="button"
+        class="icon"
+        id="downloadBtn"
+        title="导出"
+        aria-label="导出"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M12 15V3" />
+        </svg>
+      </button>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="settings" id="settings">
+        <button
+          type="button"
+          class="icon"
+          id="settingsBtn"
+          aria-label="设置"
+          aria-controls="settingsPanel"
+          aria-expanded="false"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+        <div
+          class="settings-panel"
+          id="settingsPanel"
+          role="dialog"
+          aria-label="设置"
+        >
+          <label class="settings-row" title="全局字体">
+            <span>字体</span>
+            <select id="fontSelect" aria-label="全局字体"></select>
+          </label>
+        </div>
       </div>
+      <input
+        id="fileInput"
+        type="file"
+        accept=".md,.markdown,text/markdown,text/plain"
+      />
     </div>
+    <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
     <div class="drop" id="dropHint">松开以导入 Markdown</div>
     <div class="ctx-menu" id="ctxMenu" role="menu">
       <button type="button" data-act="rename" role="menuitem">
@@ -819,8 +835,9 @@
           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>
         <span>重命名</span>
+        <span class="kbd">F2</span>
       </button>
-      <button type="button" data-act="subtitle" role="menuitem">
+      <button type="button" data-act="desc" role="menuitem">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -868,6 +885,7 @@
           <path d="m20 9-7 7" />
         </svg>
         <span>子节点</span>
+        <span class="kbd">Tab</span>
       </button>
       <button type="button" data-act="sibling" role="menuitem">
         <svg
@@ -883,6 +901,7 @@
           <path d="M12 5v14" />
         </svg>
         <span>同级</span>
+        <span class="kbd">Enter</span>
       </button>
       <div class="sep"></div>
       <button type="button" class="danger" data-act="delete" role="menuitem">
@@ -902,6 +921,7 @@
           <path d="M14 11v6" />
         </svg>
         <span>删除</span>
+        <span class="kbd">⌫</span>
       </button>
     </div>
     <div class="note-pop" id="notePop" role="dialog" aria-label="备注">
@@ -959,7 +979,7 @@
       aria-labelledby="downloadTitle"
     >
       <div class="modal">
-        <h2 id="downloadTitle">下载</h2>
+        <h2 id="downloadTitle">导出</h2>
         <label for="downloadName">文件名</label>
         <input
           id="downloadName"
@@ -971,7 +991,7 @@
         <select id="downloadFormat"></select>
         <div class="modal-actions">
           <button type="button" id="downloadCancel">取消</button>
-          <button type="button" class="primary" id="downloadOk">下载</button>
+          <button type="button" class="primary" id="downloadOk">导出</button>
         </div>
       </div>
     </div>
@@ -980,12 +1000,15 @@
       import {
         DOWNLOAD_FORMATS,
         EMOJI_CATEGORIES,
+        FONT_PRESETS,
         buildDownload,
+        buildLevelStyles,
         captureState,
         cloneData,
         createHistory,
         createLocalStore,
         createRecentIconsStore,
+        fontStacksFor,
         searchEmojis,
         nodeAtPath,
         normalizeDownloadName,
@@ -993,23 +1016,26 @@
         parseMarkdown,
         pathToNode,
         readAppMode,
+        normalizeFontId,
+        readFontId,
         recognizeNodeTap,
         writeAppMode,
+        writeFontId,
         shouldConfirmOverwrite,
         toMarkdown,
-      } from "./mm-core.js?v=20261102m";
+      } from "./mm-core.js?v=20261102o";
 
       const store = createLocalStore();
       const history = createHistory();
       const recentIcons = createRecentIconsStore();
       const DEMO = {
         title: "Markdown Mindmap",
-        subtitle: "mm.wenfu.dev",
+        desc: "mm.wenfu.dev",
         icon: "🗺️",
         open: true,
         children: [
           {
-            title: "上传大纲",
+            title: "导入大纲",
             icon: "📤",
             open: true,
             children: [
@@ -1019,14 +1045,14 @@
           },
           {
             title: "编辑节点",
-            subtitle: "标题与副标题",
+            desc: "标题与副标题",
             icon: "✏️",
             open: true,
             children: [
-              { title: "双击编辑标题", children: [] },
+              { title: "单击编辑标题", children: [] },
               {
-                title: "双击或长按副标题",
-                subtitle: "直接编辑这一行",
+                title: "单击副标题",
+                desc: "直接编辑这一行",
                 note: "菜单也能添加副标题和备注；副标题导出为 标题 :: 副标题",
                 children: [],
               },
@@ -1035,7 +1061,7 @@
               { title: "Tab / Enter 快捷键", children: [] },
             ],
           },
-          { title: "下载可选文件名与格式", icon: "⬇️", children: [] },
+          { title: "导出可选文件名与格式", icon: "⬇️", children: [] },
         ],
       };
 
@@ -1046,8 +1072,8 @@
       let editField = "title";
       let editInput = null;
       let ignoreBlur = false;
-      let lastTap = { node: null, field: null, time: 0 };
       let appMode = readAppMode();
+      let fontId = readFontId();
       let pendingImportFile = null;
       let editBaseline = null;
       let longPressTimer = null;
@@ -1056,8 +1082,6 @@
       let noteNode = null;
       let noteEditing = false;
       let noteBaseline = null;
-      let noteLongPressTimer = null;
-      let noteLastTap = { time: 0 };
       let iconNode = null;
       let iconTabId = "recent";
       let iconQuery = "";
@@ -1072,6 +1096,7 @@
       const undoBtn = document.getElementById("undoBtn");
       const uploadBtn = document.getElementById("uploadBtn");
       const modeSwitch = document.getElementById("modeSwitch");
+      const fontSelect = document.getElementById("fontSelect");
       const redoBtn = document.getElementById("redoBtn");
       const confirmModal = document.getElementById("confirmModal");
       const confirmTitle = document.getElementById("confirmTitle");
@@ -1092,32 +1117,52 @@
 
       const GAP_X = 56;
       const GAP_Y = 18;
-      const SUBTITLE_SIZE = 13;
-      const SUBTITLE_GAP = 4;
+      const DESC_SIZE = 13;
+      const DESC_GAP = 4;
       const NOTE_ICON_W = 22;
       const NODE_ICON_W = 26;
       const ICON_TABS = [
         { id: "recent", label: "最近" },
         ...EMOJI_CATEGORIES.map((c) => ({ id: c.id, label: c.label })),
       ];
-      const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
-      const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
-      const styles = [
-        { size: 30, weight: 700, family: song, fill: "#111", h: 46 },
-        { size: 22, weight: 700, family: song, fill: "#111", h: 38 },
-        { size: 17, weight: 600, family: song, fill: "#111", h: 34 },
-        { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
-        { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
-      ];
+      let sans = fontStacksFor(fontId).body;
+      let styles = buildLevelStyles(fontId);
 
-      function subtitleText(node) {
-        return node && node.subtitle ? String(node.subtitle).trim() : "";
+      function applyFont(nextId, { persist = true, announce = false } = {}) {
+        fontId = normalizeFontId(nextId);
+        const stacks = fontStacksFor(fontId);
+        sans = stacks.body;
+        styles = buildLevelStyles(fontId);
+        fontSelect.value = fontId;
+        if (persist) writeFontId(fontId);
+        if (editing) commitEdit(true);
+        if (tree) {
+          layout(tree);
+          place(tree, 0, 0);
+          draw();
+        }
+        if (announce) {
+          const preset = FONT_PRESETS.find((item) => item.id === fontId);
+          toast(`字体：${preset ? preset.label : "默认"}`);
+        }
+      }
+
+      FONT_PRESETS.forEach((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.label;
+        fontSelect.appendChild(option);
+      });
+      fontSelect.value = fontId;
+
+      function descText(node) {
+        return node && node.desc ? String(node.desc).trim() : "";
       }
 
       function nodeShowsSubtitle(node) {
         if (!node) return false;
-        if (subtitleText(node)) return true;
-        return editing && selected === node && editField === "subtitle";
+        if (descText(node)) return true;
+        return editing && selected === node && editField === "desc";
       }
 
       function noteText(node) {
@@ -1175,7 +1220,7 @@
           btn.tabIndex = on ? 0 : -1;
         });
         uploadBtn.disabled = !canEdit();
-        uploadBtn.title = canEdit() ? "上传 Markdown" : "只读模式下不能上传";
+        uploadBtn.title = canEdit() ? "导入 Markdown" : "只读模式下不能导入";
         undoBtn.title = canEdit() ? "撤销 ⌘Z" : "只读模式下不能撤销";
         redoBtn.title = canEdit() ? "重做 ⌘⇧Z" : "只读模式下不能重做";
       }
@@ -1192,10 +1237,29 @@
           hideIconPop();
           if (confirmModal.classList.contains("show")) closeConfirm(false);
           document.body.classList.remove("dragging-file");
+        } else if (
+          notePop.classList.contains("show") &&
+          noteNode &&
+          !noteEditing
+        ) {
+          noteEditing = true;
+          noteBaseline = currentSnapshot();
+          syncNotePopContent();
+          requestAnimationFrame(() => {
+            noteEdit.focus();
+            noteEdit.setSelectionRange(
+              noteEdit.value.length,
+              noteEdit.value.length,
+            );
+          });
         }
         syncModeSwitch();
         updateChrome();
         if (!editing) draw();
+      }
+
+      function setFont(nextId) {
+        applyFont(nextId, { persist: true, announce: true });
       }
 
       function updateHistoryChrome() {
@@ -1276,7 +1340,7 @@
         const has = !!selected && !editing && canEdit();
         const isRoot = selected === tree;
         ctxMenu.querySelector('[data-act="rename"]').disabled = !has;
-        ctxMenu.querySelector('[data-act="subtitle"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="desc"]').disabled = !has;
         ctxMenu.querySelector('[data-act="note"]').disabled = !has;
         ctxMenu.querySelector('[data-act="child"]').disabled = !has;
         ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
@@ -1304,25 +1368,24 @@
           editingHere && editField === "title"
             ? editInput.value || " "
             : node.title || " ";
-        const subtitle =
-          editingHere && editField === "subtitle"
+        const desc =
+          editingHere && editField === "desc"
             ? editInput.value || ""
-            : subtitleText(node);
-        const showSub = !!(
-          subtitle ||
-          (editingHere && editField === "subtitle")
-        );
+            : descText(node);
+        // Only grow height when subtitle text exists — empty desc edit overlays
+        // without shifting sibling layout on activate.
+        const showSub = !!desc;
         node.labelW = textWidth(
           title,
           node.style.weight + " " + node.style.size + "px " + node.style.family,
         );
         if (showSub) {
           const subW = textWidth(
-            subtitle || " ",
-            "400 " + SUBTITLE_SIZE + "px " + sans,
+            desc || " ",
+            "400 " + DESC_SIZE + "px " + sans,
           );
           node.labelW = Math.max(node.labelW, subW);
-          node.h = node.style.h + SUBTITLE_SIZE + SUBTITLE_GAP;
+          node.h = node.style.h + DESC_SIZE + DESC_GAP;
         } else {
           node.h = node.style.h;
         }
@@ -1380,13 +1443,6 @@
         ctxMenu.classList.remove("show");
       }
 
-      function clearNoteLongPress() {
-        if (noteLongPressTimer) {
-          clearTimeout(noteLongPressTimer);
-          noteLongPressTimer = null;
-        }
-      }
-
       function positionNotePop(anchor) {
         const pad = 8;
         const width = notePop.offsetWidth || 280;
@@ -1423,7 +1479,8 @@
 
       function openNote(node, options = {}) {
         if (!node) return;
-        const edit = !!(options.edit && canEdit());
+        const wantEdit = options.edit == null ? canEdit() : !!options.edit;
+        const edit = !!(wantEdit && canEdit());
         const clientX = options.clientX;
         const clientY = options.clientY;
         if (editing) commitEdit(true);
@@ -1434,7 +1491,6 @@
         noteNode = node;
         noteEditing = !!edit;
         noteBaseline = noteEditing ? currentSnapshot() : null;
-        noteLastTap = { time: 0 };
         syncNotePopContent();
         notePop.classList.add("show");
         const anchor =
@@ -1453,18 +1509,6 @@
             );
           });
         }
-      }
-
-      function beginNoteEdit() {
-        if (!canEdit() || !noteNode || noteEditing) return;
-        noteEditing = true;
-        noteBaseline = currentSnapshot();
-        syncNotePopContent();
-        positionNotePop(noteAnchorRect());
-        requestAnimationFrame(() => {
-          noteEdit.focus();
-          noteEdit.select();
-        });
       }
 
       function commitNote(save) {
@@ -1648,7 +1692,6 @@
         hideIconPop();
         if (selected !== node) {
           selected = node;
-          lastTap = { node: null, time: 0 };
           draw();
         } else {
           updateChrome();
@@ -1687,9 +1730,9 @@
         longPressArmed = false;
       }
 
-      function armLongPress(event, node, kind) {
+      function armLongPress(event, node) {
         if (editing || !canEdit()) return;
-        if (kind !== "subtitle" && event.pointerType !== "touch") return;
+        if (event.pointerType !== "touch") return;
         clearLongPress();
         longPressArmed = true;
         const x = event.clientX;
@@ -1706,15 +1749,14 @@
             svg.releasePointerCapture(pointerId);
           } catch (_) {}
           if (!canEdit()) return;
-          if (kind === "subtitle") beginEdit(node, "subtitle");
-          else showCtxMenu(x, y, node);
+          showCtxMenu(x, y, node);
         }, LONG_PRESS_MS);
       }
 
       function bindSubtitleGesture(group, node, textX, contentTop) {
-        const sub = subtitleText(node);
+        const sub = descText(node);
         if (!sub) return;
-        const subW = textWidth(sub, "400 " + SUBTITLE_SIZE + "px " + sans);
+        const subW = textWidth(sub, "400 " + DESC_SIZE + "px " + sans);
         const hitY = contentTop + node.style.size;
         const subHit = document.createElementNS(NS, "rect");
         subHit.setAttribute("x", textX - 4);
@@ -1722,15 +1764,14 @@
         subHit.setAttribute("width", Math.max(subW, 12) + 8);
         subHit.setAttribute(
           "height",
-          Math.max(SUBTITLE_SIZE + 6, node.y + node.h - hitY),
+          Math.max(DESC_SIZE + 6, node.y + node.h - hitY),
         );
         subHit.setAttribute("fill", "transparent");
-        subHit.setAttribute("data-field", "subtitle");
+        subHit.setAttribute("data-field", "desc");
         subHit.addEventListener("pointerdown", (event) => {
           event.stopPropagation();
           if (isSecondaryPointer(event)) return;
-          armDrag(event, node, "subtitle");
-          armLongPress(event, node, "subtitle");
+          armDrag(event, node, "desc");
         });
         group.appendChild(subHit);
       }
@@ -1794,21 +1835,25 @@
           );
           const isEditingNode = editing && node === selected;
           const showSub = nodeShowsSubtitle(node);
-          const contentH = showSub
-            ? node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE
+          const layoutHasSub = node.h > node.style.h;
+          const contentH = layoutHasSub
+            ? node.style.size + DESC_GAP + DESC_SIZE
             : node.style.size;
           const contentTop = node.y + (node.h - contentH) / 2;
           const titleY = contentTop + node.style.size / 2;
           const subY =
-            contentTop + node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE / 2;
+            contentTop + node.style.size + DESC_GAP + DESC_SIZE / 2;
           const textX = node.x + (node.iconW || 0);
           const bodyW = (node.iconW || 0) + node.labelW;
+          const noteVisualW = node.noteW ? 16 : 0;
+          const editPadX = 4;
+          const editMinW = 28;
 
           if (node === selected || isEditingNode || iconNode === node) {
             const sel = document.createElementNS(NS, "rect");
             sel.setAttribute("x", node.x - 10);
             sel.setAttribute("y", node.y + 2);
-            sel.setAttribute("width", Math.max(bodyW, 48) + 20);
+            sel.setAttribute("width", Math.max(bodyW + noteVisualW, 48) + 20);
             sel.setAttribute("height", node.h - 4);
             sel.setAttribute("rx", 4);
             sel.setAttribute("fill", "#f0f0f0");
@@ -1840,16 +1885,16 @@
               "x",
               node.x + (node.iconW || NODE_ICON_W) / 2 - 1,
             );
-            iconLabel.setAttribute("y", node.y + node.h / 2);
+            iconLabel.setAttribute("y", titleY);
             iconLabel.setAttribute("text-anchor", "middle");
             iconLabel.setAttribute("dominant-baseline", "central");
-            iconLabel.setAttribute(
-              "font-size",
-              Math.max(14, Math.min(18, node.style.size - 2)),
-            );
+            const iconSize = Math.max(14, Math.min(18, node.style.size - 2));
+            iconLabel.setAttribute("font-size", iconSize);
             iconLabel.style.pointerEvents = "none";
             if (iconText(node)) {
               iconLabel.textContent = iconText(node);
+              // Color emoji paints high in the em box, above the name's ink.
+              iconLabel.setAttribute("dy", (iconSize * 0.08).toFixed(2));
             } else {
               iconLabel.textContent = "○";
               iconLabel.setAttribute("fill", "#bbb");
@@ -1886,24 +1931,32 @@
               sub.setAttribute("dominant-baseline", "central");
               sub.setAttribute("fill", "#888");
               sub.setAttribute("font-family", sans);
-              sub.setAttribute("font-size", SUBTITLE_SIZE);
+              sub.setAttribute("font-size", DESC_SIZE);
               sub.setAttribute("font-weight", 400);
               sub.style.pointerEvents = "none";
-              sub.textContent = subtitleText(node);
+              sub.textContent = descText(node);
               group.appendChild(sub);
               bindSubtitleGesture(group, node, textX, contentTop);
             }
           } else {
-            const editW = Math.max(node.labelW + 28, 72);
             const editingTitle = editField === "title";
-            const editingSub = editField === "subtitle";
+            const editingSub = editField === "desc";
+            const placeholderW =
+              editingSub && !descText(node)
+                ? textWidth("副标题", "400 " + DESC_SIZE + "px " + sans)
+                : 0;
+            const editW = Math.max(
+              node.labelW + editPadX * 2,
+              placeholderW + editPadX * 2,
+              editMinW,
+            );
 
             if (editingTitle) {
               const fo = document.createElementNS(NS, "foreignObject");
-              fo.setAttribute("x", textX - 6);
-              fo.setAttribute("y", contentTop - 2);
+              fo.setAttribute("x", textX - editPadX);
+              fo.setAttribute("y", contentTop);
               fo.setAttribute("width", editW);
-              fo.setAttribute("height", node.style.size + 8);
+              fo.setAttribute("height", node.style.size + 2);
               const input = document.createElement("input");
               input.className = "inline-edit";
               input.type = "text";
@@ -1931,13 +1984,13 @@
 
             if (editingSub) {
               const fo = document.createElementNS(NS, "foreignObject");
-              fo.setAttribute("x", textX - 6);
+              fo.setAttribute("x", textX - editPadX);
               fo.setAttribute(
                 "y",
-                contentTop + node.style.size + SUBTITLE_GAP - 2,
+                contentTop + node.style.size + DESC_GAP,
               );
               fo.setAttribute("width", editW);
-              fo.setAttribute("height", SUBTITLE_SIZE + 8);
+              fo.setAttribute("height", DESC_SIZE + 2);
               const input = document.createElement("input");
               input.className = "inline-edit";
               input.type = "text";
@@ -1945,9 +1998,9 @@
               input.spellcheck = false;
               input.placeholder = "副标题";
               input.value =
-                activeValue != null ? activeValue : subtitleText(node);
+                activeValue != null ? activeValue : descText(node);
               input.style.fontFamily = sans;
-              input.style.fontSize = SUBTITLE_SIZE + "px";
+              input.style.fontSize = DESC_SIZE + "px";
               input.style.fontWeight = 400;
               fo.appendChild(input);
               group.appendChild(fo);
@@ -1959,9 +2012,9 @@
               sub.setAttribute("dominant-baseline", "central");
               sub.setAttribute("fill", "#888");
               sub.setAttribute("font-family", sans);
-              sub.setAttribute("font-size", SUBTITLE_SIZE);
+              sub.setAttribute("font-size", DESC_SIZE);
               sub.setAttribute("font-weight", 400);
-              sub.textContent = subtitleText(node);
+              sub.textContent = descText(node);
               group.appendChild(sub);
             }
 
@@ -1992,10 +2045,10 @@
                       "px " +
                       node.style.family,
                   );
-                  const subW = subtitleText(node)
+                  const subW = descText(node)
                     ? textWidth(
-                        subtitleText(node),
-                        "400 " + SUBTITLE_SIZE + "px " + sans,
+                        descText(node),
+                        "400 " + DESC_SIZE + "px " + sans,
                       )
                     : 0;
                   node.labelW = Math.max(node.labelW, subW);
@@ -2009,12 +2062,15 @@
                       node.style.family,
                   );
                   const subW = textWidth(
-                    value,
-                    "400 " + SUBTITLE_SIZE + "px " + sans,
+                    value || " ",
+                    "400 " + DESC_SIZE + "px " + sans,
                   );
                   node.labelW = Math.max(titleW, subW);
                 }
-                fo.setAttribute("width", Math.max(node.labelW + 28, 72));
+                fo.setAttribute(
+                  "width",
+                  Math.max(node.labelW + editPadX * 2, editMinW),
+                );
               });
               input.addEventListener("blur", () => {
                 if (ignoreBlur) return;
@@ -2068,7 +2124,6 @@
               if (isSecondaryPointer(event)) return;
               event.preventDefault();
               openNote(node, {
-                edit: false,
                 clientX: event.clientX,
                 clientY: event.clientY,
               });
@@ -2078,9 +2133,7 @@
 
           if (node.hasChildren) {
             const baseRight =
-              (node.iconW || 0) +
-              (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) +
-              (node.noteW || 0);
+              (node.iconW || 0) + node.labelW + (node.noteW || 0);
             const mx = node.x + baseRight + 16;
             const my = node.y + node.h / 2;
             const mark = document.createElementNS(NS, "circle");
@@ -2144,7 +2197,7 @@
               event.stopPropagation();
               if (isSecondaryPointer(event)) return;
               armDrag(event, node, "select");
-              armLongPress(event, node, "menu");
+              armLongPress(event, node);
             });
           }
           nodes.appendChild(group);
@@ -2219,39 +2272,33 @@
         }
         if (drag && !drag.moved && drag.node) {
           if (drag.mode === "toggle") {
-            lastTap = { node: null, time: 0 };
             hideCtxMenu();
             drag.node.open = !drag.node.open;
             selected = drag.node;
             relayout(drag.node);
             saveLocal();
-          } else if (drag.mode === "select" || drag.mode === "subtitle") {
-            const field = drag.mode === "subtitle" ? "subtitle" : "title";
+          } else if (drag.mode === "select" || drag.mode === "desc") {
+            const field = drag.mode === "desc" ? "desc" : "title";
+            hideCtxMenu();
             if (!canEdit()) {
-              lastTap = { node: null, field: null, time: 0 };
-              hideCtxMenu();
               selected = drag.node;
               draw();
             } else {
               const result = recognizeNodeTap(
-                lastTap,
+                null,
                 drag.node,
                 Date.now(),
                 undefined,
                 field,
               );
-              lastTap = result.next;
-              if (result.action === "edit") {
-                hideCtxMenu();
-                beginEdit(drag.node, field);
-              } else {
+              if (result.action === "edit") beginEdit(drag.node, field);
+              else {
                 selected = drag.node;
                 draw();
               }
             }
           }
         } else if (drag && !drag.moved && !drag.node) {
-          lastTap = { node: null, time: 0 };
           selected = null;
           hideCtxMenu();
           draw();
@@ -2346,7 +2393,7 @@
         hideCtxMenu();
         hideNotePop({ save: true });
         hideIconPop();
-        const nextField = field === "subtitle" ? "subtitle" : "title";
+        const nextField = field === "desc" ? "desc" : "title";
         if (editing && selected === node && editField === nextField) {
           editInput && editInput.focus();
           return;
@@ -2376,9 +2423,9 @@
           : null;
         let changed = false;
         if (save && node && baselineNode) {
-          if (field === "subtitle") {
-            const prev = baselineNode.subtitle
-              ? String(baselineNode.subtitle).trim()
+          if (field === "desc") {
+            const prev = baselineNode.desc
+              ? String(baselineNode.desc).trim()
               : "";
             changed = raw !== prev;
           } else {
@@ -2392,9 +2439,9 @@
         editField = "title";
         if (save && node) {
           if (changed && editBaseline) history.push(editBaseline);
-          if (field === "subtitle") {
-            if (raw) node.subtitle = raw;
-            else delete node.subtitle;
+          if (field === "desc") {
+            if (raw) node.desc = raw;
+            else delete node.desc;
           } else {
             node.title = raw || "未命名";
           }
@@ -2484,7 +2531,7 @@
         const act = btn.getAttribute("data-act");
         hideCtxMenu();
         if (act === "rename") beginEdit(selected, "title");
-        if (act === "subtitle") beginEdit(selected, "subtitle");
+        if (act === "desc") beginEdit(selected, "desc");
         if (act === "note") openNote(selected, { edit: true });
         if (act === "child") addChild(selected);
         if (act === "sibling") addSibling(selected);
@@ -2497,54 +2544,12 @@
       notePop.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
       });
-      noteView.addEventListener("pointerdown", (event) => {
-        if (noteEditing || event.button !== 0) return;
-        clearNoteLongPress();
-        const startX = event.clientX;
-        const startY = event.clientY;
-        noteLongPressTimer = setTimeout(() => {
-          noteLongPressTimer = null;
-          beginNoteEdit();
-        }, LONG_PRESS_MS);
-        const onMove = (moveEvent) => {
-          if (
-            Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) >
-            8
-          )
-            clearNoteLongPress();
-        };
-        const onUp = () => {
-          clearNoteLongPress();
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-      });
-      noteView.addEventListener("click", (event) => {
-        if (noteEditing) return;
-        const now = Date.now();
-        if (now - noteLastTap.time <= 350) {
-          noteLastTap = { time: 0 };
-          beginNoteEdit();
-          return;
-        }
-        noteLastTap = { time: now };
-      });
       document
         .getElementById("noteSave")
         .addEventListener("click", () => commitNote(true));
       document.getElementById("noteCancel").addEventListener("click", () => {
-        const host = noteNode;
-        noteEditing = false;
-        noteBaseline = null;
-        syncNotePopContent();
-        if (!nodeHasNote(host)) {
-          hideNotePop({ save: false });
-          draw();
-        } else {
-          positionNotePop(noteAnchorRect());
-        }
+        hideNotePop({ save: false });
+        draw();
       });
       noteEdit.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
@@ -2733,7 +2738,7 @@
           fileName = packed.filename;
           saveLocal();
           closeDownload();
-          toast("已下载 " + packed.filename);
+          toast("已导出 " + packed.filename);
         } catch (error) {
           toast(error.message || String(error));
         }
@@ -2760,29 +2765,32 @@
         const current = modeSwitch.querySelector(`[data-mode="${appMode}"]`);
         if (current) current.focus();
       });
+      fontSelect.addEventListener("change", () => {
+        setFont(fontSelect.value);
+      });
       document
         .getElementById("downloadBtn")
         .addEventListener("click", openDownload);
-      const help = document.getElementById("help");
-      const helpBtn = document.getElementById("helpBtn");
-      function setHelpOpen(open) {
-        help.classList.toggle("open", open);
-        helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      const settings = document.getElementById("settings");
+      const settingsBtn = document.getElementById("settingsBtn");
+      function setSettingsOpen(open) {
+        settings.classList.toggle("open", open);
+        settingsBtn.setAttribute("aria-expanded", open ? "true" : "false");
       }
-      helpBtn.addEventListener("click", (event) => {
+      settingsBtn.addEventListener("click", (event) => {
         event.stopPropagation();
-        setHelpOpen(!help.classList.contains("open"));
+        setSettingsOpen(!settings.classList.contains("open"));
       });
       window.addEventListener("pointerdown", (event) => {
-        if (!help.classList.contains("open")) return;
-        if (help.contains(event.target)) return;
-        setHelpOpen(false);
+        if (!settings.classList.contains("open")) return;
+        if (settings.contains(event.target)) return;
+        setSettingsOpen(false);
       });
       window.addEventListener(
         "keydown",
         (event) => {
-          if (event.key === "Escape" && help.classList.contains("open"))
-            setHelpOpen(false);
+          if (event.key === "Escape" && settings.classList.contains("open"))
+            setSettingsOpen(false);
         },
         true,
       );
@@ -2925,33 +2933,24 @@
         canEdit,
         getMode: () => appMode,
         setMode: (mode) => setAppMode(mode),
+        getFont: () => fontId,
+        setFont: (id) => setFont(id),
         undo,
         redo,
         beginEdit: (node, field) => beginEdit(node || selected, field),
-        doubleTap: (node, field = "title") => {
+        clickEdit: (node, field = "title") => {
           if (!canEdit()) return "select";
           const target = node || selected || tree;
-          const targetField = field === "subtitle" ? "subtitle" : "title";
-          const first = recognizeNodeTap(
+          const targetField = field === "desc" ? "desc" : "title";
+          const result = recognizeNodeTap(
             null,
             target,
             Date.now(),
             undefined,
             targetField,
           );
-          lastTap = first.next;
-          selected = target;
-          draw();
-          const second = recognizeNodeTap(
-            lastTap,
-            target,
-            Date.now(),
-            undefined,
-            targetField,
-          );
-          lastTap = second.next;
-          if (second.action === "edit") beginEdit(target, targetField);
-          return second.action;
+          if (result.action === "edit") beginEdit(target, targetField);
+          return result.action;
         },
       };
     </script>

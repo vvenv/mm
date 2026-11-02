@@ -3,6 +3,7 @@
 export const STORAGE_KEY = "mm.wenfu.dev/v1";
 export const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
 export const MODE_KEY = "mm.wenfu.dev/mode";
+export const FONT_KEY = "mm.wenfu.dev/font";
 export const DOUBLE_TAP_MS = 350;
 
 /** App mode is either read-only (`view`) or editable (`edit`). Unknown values stay editable. */
@@ -27,6 +28,70 @@ export function writeAppMode(mode, storage = globalThis.localStorage, key = MODE
   } catch {
     return false;
   }
+}
+
+/** Curated global font presets for mindmap text. `default` keeps title serif + body sans. */
+export const FONT_PRESETS = [
+  { id: "default", label: "默认" },
+  { id: "song", label: "宋体" },
+  { id: "hei", label: "黑体" },
+  { id: "kai", label: "楷体" },
+  { id: "fangsong", label: "仿宋" },
+  { id: "system", label: "系统" },
+];
+
+const FONT_STACKS = {
+  song: '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", "SimSun", serif',
+  hei: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+  kai: '"Kaiti SC", "STKaiti", "KaiTi", serif',
+  fangsong: '"STFangsong", "FangSong", "仿宋", serif',
+  system:
+    'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+};
+
+export function normalizeFontId(value) {
+  return FONT_PRESETS.some((preset) => preset.id === value) ? value : "default";
+}
+
+export function readFontId(storage = globalThis.localStorage, key = FONT_KEY) {
+  if (!storage) return "default";
+  try {
+    return normalizeFontId(storage.getItem(key));
+  } catch {
+    return "default";
+  }
+}
+
+export function writeFontId(fontId, storage = globalThis.localStorage, key = FONT_KEY) {
+  if (!storage) return false;
+  try {
+    storage.setItem(key, normalizeFontId(fontId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve title/body font stacks for a preset. Non-default presets use one family globally. */
+export function fontStacksFor(fontId) {
+  const id = normalizeFontId(fontId);
+  if (id === "default") {
+    return { title: FONT_STACKS.song, body: FONT_STACKS.hei };
+  }
+  const family = FONT_STACKS[id] || FONT_STACKS.hei;
+  return { title: family, body: family };
+}
+
+/** Level styles for layout/draw. Depth 0–2 use title stack; deeper levels use body stack. */
+export function buildLevelStyles(fontId) {
+  const { title, body } = fontStacksFor(fontId);
+  return [
+    { size: 30, weight: 700, family: title, fill: "#111", h: 46 },
+    { size: 22, weight: 700, family: title, fill: "#111", h: 38 },
+    { size: 17, weight: 600, family: title, fill: "#111", h: 34 },
+    { size: 15, weight: 500, family: body, fill: "#111", h: 30 },
+    { size: 14, weight: 400, family: body, fill: "#333", h: 28 },
+  ];
 }
 
 /** Curated emoji sets for the icon picker (tabs). */
@@ -275,15 +340,15 @@ export function indentWidth(prefix) {
   return width;
 }
 
-/** Split `title :: subtitle` on the first `::`. Empty title keeps the raw string. */
+/** Split `title :: desc` on the first `::`. Empty title keeps the raw string. */
 export function parseTitleSubtitle(raw) {
   const text = String(raw || "").trim();
   const idx = text.indexOf("::");
-  if (idx === -1) return { title: text, subtitle: "" };
+  if (idx === -1) return { title: text, desc: "" };
   const title = text.slice(0, idx).trim();
-  const subtitle = text.slice(idx + 2).trim();
-  if (!title) return { title: text, subtitle: "" };
-  return { title, subtitle };
+  const desc = text.slice(idx + 2).trim();
+  if (!title) return { title: text, desc: "" };
+  return { title, desc };
 }
 
 /** Pull a leading emoji (incl. ZWJ sequences) when followed by more title text. */
@@ -300,8 +365,8 @@ export function splitLeadingIcon(raw) {
 
 export function formatListLabel(node) {
   const title = node && node.title != null ? String(node.title) : "";
-  const subtitle = node && node.subtitle ? String(node.subtitle).trim() : "";
-  const body = subtitle ? `${title} :: ${subtitle}` : title;
+  const desc = node && node.desc ? String(node.desc).trim() : "";
+  const body = desc ? `${title} :: ${desc}` : title;
   const icon = node && node.icon ? String(node.icon).trim() : "";
   return icon ? `${icon} ${body}` : body;
 }
@@ -310,14 +375,14 @@ function nodeFromTitleLine(raw) {
   const headed = splitLeadingIcon(raw);
   const parts = parseTitleSubtitle(headed.title);
   const node = { title: parts.title, children: [] };
-  if (parts.subtitle) node.subtitle = parts.subtitle;
+  if (parts.desc) node.desc = parts.desc;
   if (headed.icon) node.icon = headed.icon;
   return node;
 }
 
 export function parseMarkdown(markdown) {
   const lines = String(markdown).split(/\r?\n/);
-  const root = { title: "Mindmap", subtitle: "", children: [] };
+  const root = { title: "Mindmap", desc: "", children: [] };
   const stack = [{ indent: -1, node: root }];
   let sawList = false;
 
@@ -335,8 +400,8 @@ export function parseMarkdown(markdown) {
         if (headed.icon) root.icon = headed.icon;
         continue;
       }
-      if (level === 2 && !sawList && !root.subtitle && root.children.length === 0) {
-        root.subtitle = title;
+      if (level === 2 && !sawList && !root.desc && root.children.length === 0) {
+        root.desc = title;
         continue;
       }
       const indent = (level - 2) * 2;
@@ -378,7 +443,7 @@ function appendNoteLines(lines, note, prefix) {
 export function toMarkdown(node) {
   const rootLabel = node.icon ? `${node.icon} ${node.title}` : node.title;
   const lines = [`# ${rootLabel}`];
-  if (node.subtitle) lines.push(`## ${node.subtitle}`);
+  if (node.desc) lines.push(`## ${node.desc}`);
   if (node.note) {
     lines.push("");
     appendNoteLines(lines, node.note, "");
@@ -396,7 +461,7 @@ export function toMarkdown(node) {
 
 export function cloneData(node) {
   const out = { title: node.title, children: (node.children || []).map(cloneData) };
-  if (node.subtitle) out.subtitle = node.subtitle;
+  if (node.desc) out.desc = node.desc;
   if (node.note) out.note = node.note;
   if (node.icon) out.icon = node.icon;
   if (typeof node.open === "boolean") out.open = node.open;
@@ -430,7 +495,7 @@ export function createRecentIconsStore(storage = globalThis.localStorage, key = 
 }
 
 export function pageTitleOf(node) {
-  return node.subtitle ? `${node.title} · ${node.subtitle}` : node.title;
+  return node.desc ? `${node.title} · ${node.desc}` : node.title;
 }
 
 export function countNodes(node) {
@@ -465,18 +530,13 @@ export function buildDownload(tree, formatId = "markdown", name) {
 }
 
 /**
- * First click selects; a second click on the same node and field within the
- * threshold edits. Title and subtitle are separate targets.
- * Needed because selecting redraws SVG and destroys the DOM target, so native
- * `dblclick` never fires.
+ * A click on a node field begins editing. Title and desc are separate targets.
+ * Kept so the app does not rely on native `dblclick` (SVG redraw replaces the
+ * DOM target after selection).
  */
 export function recognizeNodeTap(prev, node, now = Date.now(), threshold = DOUBLE_TAP_MS, field = "title") {
-  const target = field === "subtitle" ? "subtitle" : "title";
-  const prevField = prev && prev.field === "subtitle" ? "subtitle" : "title";
-  if (prev && prev.node === node && prevField === target && now - prev.time <= threshold) {
-    return { action: "edit", field: target, next: { node: null, field: null, time: 0 } };
-  }
-  return { action: "select", field: target, next: { node, field: target, time: now } };
+  const target = field === "desc" ? "desc" : "title";
+  return { action: "edit", field: target, next: { node: null, field: null, time: 0 } };
 }
 
 export function createLocalStore(storage = globalThis.localStorage, key = STORAGE_KEY) {
