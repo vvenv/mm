@@ -3,7 +3,6 @@
   "private": true,
   "packageManager": "pnpm@11.22.0",
   "scripts": {
-    "mindmap": "node md2mindmap.js",
     "deploy": "bash scripts/deploy.sh",
     "test": "node --test test/**/*.test.mjs"
   }
