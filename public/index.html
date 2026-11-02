@@ -1082,6 +1082,7 @@
             children: [
               { title: "拖动平移", children: [] },
               { title: "⌘/Ctrl + 滚轮缩放", children: [] },
+              { title: "⌘/Ctrl + +/- 缩放", children: [] },
               { title: "手机双指捏合缩放", children: [] },
             ],
           },
@@ -2732,14 +2733,37 @@
           redo();
           return;
         }
-        if (editing) return;
         const tag = event.target && event.target.tagName;
-        if (
+        const inField =
           tag === "INPUT" ||
           tag === "TEXTAREA" ||
-          event.target.isContentEditable
-        )
+          event.target.isContentEditable;
+        if (
+          mod &&
+          !editing &&
+          !inField &&
+          (event.key === "=" ||
+            event.key === "+" ||
+            event.key === "-" ||
+            event.code === "NumpadAdd" ||
+            event.code === "NumpadSubtract")
+        ) {
+          event.preventDefault();
+          const zoomIn =
+            event.key === "=" ||
+            event.key === "+" ||
+            event.code === "NumpadAdd";
+          const rect = svg.getBoundingClientRect();
+          zoomAt(
+            window.innerWidth / 2 - rect.left,
+            window.innerHeight / 2 - rect.top,
+            scale * (zoomIn ? 1.2 : 1 / 1.2),
+          );
+          apply();
           return;
+        }
+        if (editing) return;
+        if (inField) return;
         if (modeSwitch.contains(event.target)) return;
         if (!selected && event.key !== "Escape") return;
         if (!canEdit()) {

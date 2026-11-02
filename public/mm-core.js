@@ -602,7 +602,7 @@ export function toInteractiveHtml(tree) {
 </head>
 <body>
 <svg id="map" role="img" aria-label="${escapeHtml(pageTitle)}思维导图"></svg>
-<p class="hint">点击展开 · 点备注图标查看 · 拖拽移动 · ⌘/Ctrl + 滚轮缩放</p>
+<p class="hint">点击展开 · 点备注图标查看 · 拖拽移动 · ⌘/Ctrl + 滚轮或 +/- 缩放</p>
 <div class="note-pop" id="notePop" role="dialog" aria-label="备注"><div class="note-view" id="noteView"></div></div>
 <script>
 const tree = ${data};
@@ -877,6 +877,29 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     hideNotePop();
     draw();
+    return;
+  }
+  const mod = event.metaKey || event.ctrlKey;
+  if (
+    mod &&
+    (event.key === "=" ||
+      event.key === "+" ||
+      event.key === "-" ||
+      event.code === "NumpadAdd" ||
+      event.code === "NumpadSubtract")
+  ) {
+    event.preventDefault();
+    hideNotePop();
+    const zoomIn =
+      event.key === "=" || event.key === "+" || event.code === "NumpadAdd";
+    const next = Math.min(2.4, Math.max(0.35, scale * (zoomIn ? 1.2 : 1 / 1.2)));
+    const rect = svg.getBoundingClientRect();
+    const px = window.innerWidth / 2 - rect.left;
+    const py = window.innerHeight / 2 - rect.top;
+    tx = px - ((px - tx) * next) / scale;
+    ty = py - ((py - ty) * next) / scale;
+    scale = next;
+    apply();
   }
 });
 notePop.addEventListener("pointerdown", (event) => event.stopPropagation());
