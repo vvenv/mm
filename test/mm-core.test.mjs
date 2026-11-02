@@ -77,19 +77,21 @@ test("toMarkdown round-trips with parseMarkdown", () => {
   assert.equal(tree.children[0].children[0].children[0].title, "副驾驶");
 });
 
-test("parseTitleSubtitle splits on first ::", () => {
+test("parseTitleSubtitle still reads legacy ::", () => {
   assert.deepEqual(parseTitleSubtitle("主驾驶 :: 人审关键"), { title: "主驾驶", desc: "人审关键" });
   assert.deepEqual(parseTitleSubtitle("只有标题"), { title: "只有标题", desc: "" });
   assert.deepEqual(parseTitleSubtitle("a :: b :: c"), { title: "a", desc: "b :: c" });
-  assert.equal(formatListLabel({ title: "主驾驶", desc: "人审关键" }), "主驾驶 :: 人审关键");
+  assert.equal(formatListLabel({ title: "主驾驶", desc: "人审关键" }), "主驾驶");
 });
 
-test("list item desc round-trips via ::", () => {
+test("list item desc round-trips as indented paragraph", () => {
   const source = `# Root
 ## Root sub
 
-- 主驾驶 :: 人审关键
-  - 子项 :: 说明
+- 主驾驶
+  人审关键
+  - 子项
+    说明
 - 普通
 `;
   const tree = parseMarkdown(source);
@@ -99,11 +101,31 @@ test("list item desc round-trips via ::", () => {
   assert.equal(tree.children[0].children[0].desc, "说明");
   assert.equal(tree.children[1].desc, undefined);
 
-  const again = parseMarkdown(toMarkdown(tree));
+  const md = toMarkdown(tree);
+  assert.match(md, /^- 主驾驶$/m);
+  assert.match(md, /^  人审关键$/m);
+  assert.match(md, /^    说明$/m);
+  assert.doesNotMatch(md, /::/);
+  assert.doesNotMatch(md, /^\s*\|/m);
+
+  const again = parseMarkdown(md);
   assert.equal(again.children[0].desc, "人审关键");
   assert.equal(again.children[0].children[0].title, "子项");
   assert.equal(again.children[0].children[0].desc, "说明");
-  assert.match(toMarkdown(tree), /- 主驾驶 :: 人审关键/);
+});
+
+test("legacy :: list labels still import, export as paragraph", () => {
+  const tree = parseMarkdown(`# Root
+
+- 主驾驶 :: 人审关键
+  - 子项 :: 说明
+`);
+  assert.equal(tree.children[0].title, "主驾驶");
+  assert.equal(tree.children[0].desc, "人审关键");
+  assert.equal(tree.children[0].children[0].desc, "说明");
+  const md = toMarkdown(tree);
+  assert.match(md, /^  人审关键$/m);
+  assert.doesNotMatch(md, /::/);
 });
 
 test("splitLeadingIcon and icon markdown round-trip", () => {
@@ -113,7 +135,8 @@ test("splitLeadingIcon and icon markdown round-trip", () => {
 
   const source = `# 🗺️ Root
 
-- 📤 上传 :: 说明
+- 📤 上传
+  说明
   - 子项
 - 普通
 `;
@@ -123,11 +146,12 @@ test("splitLeadingIcon and icon markdown round-trip", () => {
   assert.equal(tree.children[0].icon, "📤");
   assert.equal(tree.children[0].title, "上传");
   assert.equal(tree.children[0].desc, "说明");
-  assert.equal(formatListLabel(tree.children[0]), "📤 上传 :: 说明");
+  assert.equal(formatListLabel(tree.children[0]), "📤 上传");
 
   const again = parseMarkdown(toMarkdown(tree));
   assert.equal(again.icon, "🗺️");
   assert.equal(again.children[0].icon, "📤");
+  assert.equal(again.children[0].desc, "说明");
   assert.equal(again.children[1].icon, undefined);
 });
 
@@ -156,6 +180,22 @@ test("searchEmojis matches names and category labels", () => {
   assert.equal(searchEmojis("zzznomatch").length, 0);
 });
 
+test("searchEmojis heart terms hit hearts, not whole symbols category", () => {
+  const hearts = searchEmojis("heart");
+  assert.ok(hearts.includes("❤️"));
+  assert.ok(hearts.includes("💕"));
+  assert.ok(!hearts.includes("❌"), "must not dump unrelated symbols");
+  assert.ok(hearts.length < 40, `expected heart subset, got ${hearts.length}`);
+
+  const zh = searchEmojis("心");
+  assert.ok(zh.includes("❤️"));
+  assert.ok(!zh.includes("⚛️"));
+
+  const phrase = searchEmojis("heart emoji");
+  assert.ok(phrase.includes("❤️"));
+  assert.ok(!phrase.includes("✅"));
+});
+
 test("node notes round-trip via blockquotes", () => {
   const source = `# Root
 ## Root sub
@@ -163,7 +203,8 @@ test("node notes round-trip via blockquotes", () => {
 > root note
 > line 2
 
-- A :: sub
+- A
+  sub
   > note A
   > more
   - B
@@ -172,15 +213,18 @@ test("node notes round-trip via blockquotes", () => {
 `;
   const tree = parseMarkdown(source);
   assert.equal(tree.note, "root note\nline 2");
+  assert.equal(tree.children[0].desc, "sub");
   assert.equal(tree.children[0].note, "note A\nmore");
   assert.equal(tree.children[0].children[0].note, "note B");
   assert.equal(tree.children[1].note, undefined);
 
   const md = toMarkdown(tree);
   assert.match(md, /^> root note$/m);
+  assert.match(md, /^  sub$/m);
   assert.match(md, /^  > note A$/m);
   const again = parseMarkdown(md);
   assert.equal(again.note, "root note\nline 2");
+  assert.equal(again.children[0].desc, "sub");
   assert.equal(again.children[0].note, "note A\nmore");
   assert.equal(again.children[0].children[0].note, "note B");
 });

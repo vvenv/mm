@@ -138,15 +138,16 @@ export const EMOJI_CATEGORIES = [
   },
 ];
 
+/** Category-level synonyms only — never item concepts (e.g. heart, fruit, car). */
 const CATEGORY_ALIAS = {
-  smileys: "表情 脸 情绪 face smile emotion",
-  people: "人物 人 手 people hand person",
+  smileys: "表情 脸 情绪 face emotion smiley",
+  people: "人物 人 people person body",
   nature: "自然 动物 植物 animal nature plant",
-  food: "食物 吃 水果 food fruit",
+  food: "食物 饮食 food drink eat",
   activity: "活动 运动 游戏 sport game activity",
-  travel: "旅行 交通 地点 travel place car",
+  travel: "旅行 交通 地点 travel place transport",
   objects: "物品 东西 object tool",
-  symbols: "符号 心 标记 symbol heart",
+  symbols: "符号 标记 symbol sign mark",
 };
 
 /** Search text for common icons. Unlisted icons still match their category name. */
@@ -289,8 +290,25 @@ const EMOJI_KEYWORDS = {
   "🎁": "礼物 gift",
   "✉️": "邮件 信 mail email",
   "📅": "日历 calendar",
-  "❤️": "爱心 红心 heart love",
-  "💔": "心碎 heartbreak",
+  "❤️": "爱心 红心 心 heart love red",
+  "🧡": "爱心 橙心 心 heart orange",
+  "💛": "爱心 黄心 心 heart yellow",
+  "💚": "爱心 绿心 心 heart green",
+  "💙": "爱心 蓝心 心 heart blue",
+  "💜": "爱心 紫心 心 heart purple",
+  "🖤": "爱心 黑心 心 heart black",
+  "🤍": "爱心 白心 心 heart white",
+  "🤎": "爱心 棕心 心 heart brown",
+  "💔": "心碎 心 heartbreak broken heart",
+  "❣️": "爱心 心 heart exclamation",
+  "💕": "爱心 两颗心 心 hearts love",
+  "💞": "爱心 旋转心 心 revolving hearts love",
+  "💓": "爱心 心跳 心 beating heart love",
+  "💗": "爱心 成长心 心 growing heart love",
+  "💖": "爱心 闪亮心 心 sparkling heart love",
+  "💘": "爱心 丘比特 心 cupid heart love arrow",
+  "💝": "爱心 礼物心 心 gift heart love",
+  "💟": "爱心 心 heart decoration love",
   "⭐": "星星 star",
   "✅": "完成 勾 check done",
   "❌": "错误 叉 error",
@@ -303,26 +321,40 @@ const EMOJI_KEYWORDS = {
   "⭐️": "星星 star",
 };
 
+const SEARCH_STOPWORDS = new Set(["emoji", "emojis", "icon", "icons"]);
+
 export function searchEmojis(query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return [];
-  const cjk = /[\u3400-\u9fff]/.test(q);
-  const hit = (text) => {
+  const terms = q
+    .split(/[\s,]+/)
+    .filter((term) => term && !SEARCH_STOPWORDS.has(term));
+  if (!terms.length) return [];
+
+  const termHit = (term, text) => {
     const value = String(text || "").toLowerCase();
     if (!value) return false;
-    if (cjk) return value.includes(q);
-    return value.split(/[\s,]+/).some((word) => word.startsWith(q));
+    if (/[\u3400-\u9fff]/.test(term)) return value.includes(term);
+    return value.split(/[\s,]+/).some((word) => word.startsWith(term));
   };
+
   const hits = [];
   const seen = new Set();
   for (const cat of EMOJI_CATEGORIES) {
-    const catHit = hit(`${cat.label} ${CATEGORY_ALIAS[cat.id] || ""}`);
+    const catText = `${cat.label} ${CATEGORY_ALIAS[cat.id] || ""}`;
     for (const emoji of cat.emojis) {
       if (seen.has(emoji)) continue;
-      if (catHit || emoji.includes(q) || hit(EMOJI_KEYWORDS[emoji])) {
-        seen.add(emoji);
-        hits.push(emoji);
-      }
+      const kw = EMOJI_KEYWORDS[emoji] || "";
+      // Every query term must match category, keywords, or the glyph itself.
+      const matched = terms.every(
+        (term) =>
+          termHit(term, catText) ||
+          emoji.includes(term) ||
+          termHit(term, kw),
+      );
+      if (!matched) continue;
+      seen.add(emoji);
+      hits.push(emoji);
     }
   }
   return hits;
@@ -340,7 +372,10 @@ export function indentWidth(prefix) {
   return width;
 }
 
-/** Split `title :: desc` on the first `::`. Empty title keeps the raw string. */
+/**
+ * Legacy inline `title :: desc` (still accepted on import).
+ * Canonical form is an indented paragraph under the list item.
+ */
 export function parseTitleSubtitle(raw) {
   const text = String(raw || "").trim();
   const idx = text.indexOf("::");
@@ -363,12 +398,11 @@ export function splitLeadingIcon(raw) {
   return { icon: match[1], title: rest };
 }
 
+/** List label is icon + title; subtitle is nested paragraph content. */
 export function formatListLabel(node) {
   const title = node && node.title != null ? String(node.title) : "";
-  const desc = node && node.desc ? String(node.desc).trim() : "";
-  const body = desc ? `${title} :: ${desc}` : title;
   const icon = node && node.icon ? String(node.icon).trim() : "";
-  return icon ? `${icon} ${body}` : body;
+  return icon ? `${icon} ${title}` : title;
 }
 
 function nodeFromTitleLine(raw) {
@@ -378,6 +412,10 @@ function nodeFromTitleLine(raw) {
   if (parts.desc) node.desc = parts.desc;
   if (headed.icon) node.icon = headed.icon;
   return node;
+}
+
+function appendHostField(host, field, piece) {
+  host[field] = host[field] ? `${host[field]}\n${piece}` : piece;
 }
 
 export function parseMarkdown(markdown) {
@@ -414,20 +452,30 @@ export function parseMarkdown(markdown) {
 
     const quote = line.match(/^(\s*)>\s?(.*)$/);
     if (quote) {
-      const host = stack[stack.length - 1].node;
-      const piece = quote[2];
-      host.note = host.note ? `${host.note}\n${piece}` : piece;
+      appendHostField(stack[stack.length - 1].node, "note", quote[2]);
       continue;
     }
 
     const item = line.match(/^(\s*)[-*+]\s+(.+)$/);
-    if (!item) continue;
-    sawList = true;
-    const indent = indentWidth(item[1]);
-    const node = nodeFromTitleLine(item[2]);
-    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
-    stack[stack.length - 1].node.children.push(node);
-    stack.push({ indent, node });
+    if (item) {
+      sawList = true;
+      const indent = indentWidth(item[1]);
+      const node = nodeFromTitleLine(item[2]);
+      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+      stack[stack.length - 1].node.children.push(node);
+      stack.push({ indent, node });
+      continue;
+    }
+
+    // Indented paragraph under the current list item → subtitle (CommonMark-ish).
+    const para = line.match(/^(\s+)(.+)$/);
+    if (para && sawList) {
+      const host = stack[stack.length - 1];
+      if (host.indent >= 0 && indentWidth(para[1]) > host.indent) {
+        appendHostField(host.node, "desc", para[2]);
+        continue;
+      }
+    }
   }
 
   if (!root.children.length) throw new Error("没有解析到任何大纲节点");
@@ -437,6 +485,12 @@ export function parseMarkdown(markdown) {
 function appendNoteLines(lines, note, prefix) {
   String(note).split(/\n/).forEach((noteLine) => {
     lines.push(`${prefix}> ${noteLine}`);
+  });
+}
+
+function appendParagraphLines(lines, text, prefix) {
+  String(text).split(/\n/).forEach((line) => {
+    lines.push(`${prefix}${line}`);
   });
 }
 
@@ -450,8 +504,11 @@ export function toMarkdown(node) {
   }
   lines.push("");
   function walk(item, depth) {
-    lines.push(`${"  ".repeat(depth)}- ${formatListLabel(item)}`);
-    if (item.note) appendNoteLines(lines, item.note, `${"  ".repeat(depth)}  `);
+    const pad = "  ".repeat(depth);
+    lines.push(`${pad}- ${formatListLabel(item)}`);
+    const nested = `${pad}  `;
+    if (item.desc) appendParagraphLines(lines, item.desc, nested);
+    if (item.note) appendNoteLines(lines, item.note, nested);
     item.children.forEach((child) => walk(child, depth + 1));
   }
   node.children.forEach((child) => walk(child, 0));
