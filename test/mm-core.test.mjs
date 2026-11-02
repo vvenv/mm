@@ -13,16 +13,21 @@ import {
   createHistory,
   createLocalStore,
   createRecentIconsStore,
+  searchEmojis,
   formatListLabel,
   nodeAtPath,
+  MODE_KEY,
+  normalizeAppMode,
   normalizeDownloadName,
   parseMarkdown,
+  readAppMode,
   parseTitleSubtitle,
   pathToNode,
   recognizeNodeTap,
   shouldConfirmOverwrite,
   splitLeadingIcon,
   toMarkdown,
+  writeAppMode,
 } from "../public/mm-core.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -136,6 +141,14 @@ test("createRecentIconsStore keeps newest-first unique list", () => {
   assert.ok(EMOJI_CATEGORIES.every((c) => c.id && c.label && c.emojis.length));
 });
 
+test("searchEmojis matches names and category labels", () => {
+  assert.ok(searchEmojis("苹果").includes("🍎"));
+  assert.ok(searchEmojis("apple").includes("🍎"));
+  assert.ok(searchEmojis("食物").includes("🍜"));
+  assert.deepEqual(searchEmojis("   "), []);
+  assert.equal(searchEmojis("zzznomatch").length, 0);
+});
+
 test("node notes round-trip via blockquotes", () => {
   const source = `# Root
 ## Root sub
@@ -196,6 +209,39 @@ test("recognizeNodeTap: switching nodes starts a new select streak", () => {
   assert.equal(third.action, "edit");
 });
 
+test("recognizeNodeTap: subtitle double-tap edits subtitle and does not complete a title tap", () => {
+  const node = { title: "A", subtitle: "s" };
+  const first = recognizeNodeTap(null, node, 1000, DOUBLE_TAP_MS, "subtitle");
+  assert.equal(first.action, "select");
+  assert.equal(first.field, "subtitle");
+  assert.equal(first.next.field, "subtitle");
+
+  const crossed = recognizeNodeTap(first.next, node, 1100, DOUBLE_TAP_MS, "title");
+  assert.equal(crossed.action, "select");
+  assert.equal(crossed.field, "title");
+
+  const again = recognizeNodeTap(first.next, node, 1100, DOUBLE_TAP_MS, "subtitle");
+  assert.equal(again.action, "edit");
+  assert.equal(again.field, "subtitle");
+});
+
+test("app mode persists as view or edit", () => {
+  assert.equal(normalizeAppMode("view"), "view");
+  assert.equal(normalizeAppMode("edit"), "edit");
+  assert.equal(normalizeAppMode("nope"), "edit");
+  const memory = new Map();
+  const storage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+  };
+  assert.equal(readAppMode(storage), "edit");
+  assert.equal(writeAppMode("view", storage), true);
+  assert.equal(storage.getItem(MODE_KEY), "view");
+  assert.equal(readAppMode(storage), "view");
+  writeAppMode("edit", storage);
+  assert.equal(readAppMode(storage), "edit");
+});
+
 test("createLocalStore persists and restores tree", () => {
   const memory = new Map();
   const storage = {
@@ -237,6 +283,13 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /data-node-path/);
   assert.match(html, /data-act="subtitle"/);
   assert.match(html, /beginEdit\(selected, "subtitle"\)/);
+  assert.match(html, /id="modeSwitch"/);
+  assert.match(html, /data-mode="view"/);
+  assert.match(html, /data-mode="edit"/);
+  assert.match(html, /armLongPress/);
+  assert.match(html, /data-field", "subtitle"/);
+  assert.match(html, /readAppMode/);
+  assert.match(html, /beginEdit\(drag\.node, field\)/);
   assert.match(html, /nodeShowsSubtitle/);
   assert.match(html, /data-act="note"/);
   assert.match(html, /openNote\(selected/);
@@ -244,6 +297,10 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /iconPop/);
   assert.match(html, /openIconPicker/);
   assert.match(html, /createRecentIconsStore/);
+  assert.match(html, /iconSearch/);
+  assert.match(html, /searchEmojis/);
+  assert.match(html, /flex-wrap: nowrap/);
+  assert.match(html, /grid-auto-rows: 40px/);
   assert.equal(/requestDelete/.test(html), false);
 });
 

@@ -1,1924 +1,2959 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Markdown Mindmap</title>
-<meta name="description" content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、上传下载。">
-<link rel="canonical" href="https://mm.wenfu.dev/">
-<style>
-  html, body { margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden; }
-  svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
-  svg.dragging { cursor: grabbing; }
-  .toolbar {
-    position: fixed; top: 12px; left: 14px; z-index: 2;
-    display: flex; gap: 8px; align-items: center;
-  }
-  .brand {
-    margin: 0 6px 0 0;
-    font: 700 15px/1 "Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif;
-    letter-spacing: 0.02em;
-    color: #111;
-    user-select: none;
-  }
-  .toolbar button, .ctx-menu button, .modal button, .modal-actions button {
-    margin: 0; padding: 7px 12px;
-    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
-    font: 13px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    cursor: pointer;
-  }
-  .toolbar button {
-    border-color: transparent; background: transparent;
-  }
-  .toolbar button:hover:not(:disabled), .ctx-menu button:hover:not(:disabled), .modal button:hover:not(:disabled) {
-    border-color: #999;
-  }
-  .toolbar button:hover:not(:disabled) {
-    border-color: transparent; background: #f3f3f3;
-  }
-  .toolbar button.icon {
-    width: 34px; height: 34px; padding: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  .toolbar button.icon svg { width: 16px; height: 16px; display: block; }
-  .toolbar button:disabled { opacity: 0.35; cursor: default; }
-  .toolbar input[type="file"] { display: none; }
-  .toolbar .sep {
-    width: 1px; height: 18px; margin: 0 2px; background: #e5e5e5;
-  }
-  #map { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-  .help {
-    position: fixed; top: 12px; right: 14px; z-index: 2;
-  }
-  .help > button.icon {
-    margin: 0; padding: 0; width: 34px; height: 34px;
-    border: 1px solid transparent; border-radius: 6px; background: transparent; color: #111;
-    display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer;
-  }
-  .help > button.icon:hover { background: #f3f3f3; }
-  .help > button.icon svg { width: 16px; height: 16px; display: block; }
-  .help-tip {
-    position: absolute; top: calc(100% + 8px); right: 0;
-    width: max-content; max-width: min(280px, calc(100vw - 28px));
-    margin: 0; padding: 10px 12px;
-    border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #333;
-    box-shadow: 0 10px 28px rgba(0,0,0,.1);
-    font: 13px/1.45 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    opacity: 0; visibility: hidden; pointer-events: none;
-    transform: translateY(-2px);
-    transition: opacity .15s, transform .15s, visibility .15s;
-  }
-  .help-tip ul {
-    margin: 0; padding: 0 0 0 1.1em;
-  }
-  .help-tip li { margin: 0; padding: 2px 0; }
-  .note-pop {
-    position: fixed; z-index: 4;
-    display: none; width: min(320px, calc(100vw - 24px));
-    margin: 0; padding: 0;
-    border: 1px solid #ddd; border-radius: 10px; background: #fff; color: #222;
-    box-shadow: 0 10px 28px rgba(0,0,0,.12);
-    overflow: hidden;
-  }
-  .note-pop.show { display: block; }
-  .note-pop .note-view {
-    margin: 0; padding: 12px 14px;
-    min-height: 72px; max-height: 240px; overflow: auto;
-    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    white-space: pre-wrap; word-break: break-word;
-    color: #333; cursor: text;
-  }
-  .note-pop .note-view:empty::before {
-    content: "暂无备注，双击或长按编辑";
-    color: #aaa;
-  }
-  .note-pop .note-edit {
-    display: none; width: 100%; box-sizing: border-box;
-    margin: 0; padding: 12px 14px; border: 0; outline: none; resize: vertical;
-    min-height: 120px; max-height: 280px;
-    font: 13px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    color: #222; background: #fff;
-  }
-  .note-pop.editing .note-view { display: none; }
-  .note-pop.editing .note-edit { display: block; }
-  .note-pop .note-foot {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 8px 10px; border-top: 1px solid #eee; background: #fafafa;
-  }
-  .note-pop .note-foot button {
-    margin: 0; padding: 6px 10px;
-    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
-    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    cursor: pointer;
-  }
-  .note-pop .note-foot button.primary {
-    border-color: #111; background: #111; color: #fff;
-  }
-  .note-pop .note-foot button:hover { border-color: #999; }
-  .note-pop .note-foot button.primary:hover { border-color: #000; background: #222; }
-  .icon-pop {
-    position: fixed; z-index: 4;
-    display: none; width: min(360px, calc(100vw - 24px));
-    margin: 0; padding: 0;
-    border: 1px solid #ddd; border-radius: 10px; background: #fff; color: #222;
-    box-shadow: 0 10px 28px rgba(0,0,0,.12);
-    overflow: hidden;
-  }
-  .icon-pop.show { display: flex; flex-direction: column; max-height: min(420px, calc(100vh - 24px)); }
-  .icon-pop .icon-tabs {
-    display: flex; flex-wrap: nowrap; gap: 2px;
-    padding: 8px 8px 0; overflow-x: auto; border-bottom: 1px solid #eee;
-  }
-  .icon-pop .icon-tabs button {
-    flex: 0 0 auto; margin: 0; padding: 7px 10px;
-    border: 0; border-radius: 7px 7px 0 0; background: transparent; color: #666;
-    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    cursor: pointer;
-  }
-  .icon-pop .icon-tabs button.active {
-    background: #f3f3f3; color: #111; font-weight: 600;
-  }
-  .icon-pop .icon-grid {
-    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
-    padding: 8px; overflow: auto; flex: 1 1 auto;
-  }
-  .icon-pop .icon-grid button {
-    margin: 0; padding: 0; width: 100%; aspect-ratio: 1;
-    border: 0; border-radius: 8px; background: transparent;
-    font-size: 22px; line-height: 1; cursor: pointer;
-  }
-  .icon-pop .icon-grid button:hover { background: #f3f3f3; }
-  .icon-pop .icon-empty {
-    margin: 0; padding: 28px 16px; text-align: center; color: #999;
-    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
-  }
-  .icon-pop .icon-foot {
-    display: flex; justify-content: space-between; align-items: center; gap: 8px;
-    padding: 8px 10px; border-top: 1px solid #eee; background: #fafafa;
-  }
-  .icon-pop .icon-foot button {
-    margin: 0; padding: 6px 10px;
-    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
-    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    cursor: pointer;
-  }
-  .icon-pop .icon-foot button:hover { border-color: #999; }
-  .help:hover .help-tip,
-  .help:focus-within .help-tip,
-  .help.open .help-tip {
-    opacity: 1; visibility: visible; transform: translateY(0);
-  }
-  .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-    margin: 0; padding: 8px 14px; border-radius: 6px;
-    background: #111; color: #fff;
-    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 6;
-  }
-  .toast.show { opacity: 1; }
-  .drop {
-    position: fixed; inset: 0; z-index: 3;
-    display: none; align-items: center; justify-content: center;
-    background: rgba(255,255,255,.82);
-    border: 2px dashed #111; box-sizing: border-box;
-    font: 18px/1.4 "Songti SC", "STSongti-SC-Regular", serif;
-    color: #111; pointer-events: none;
-  }
-  body.dragging-file .drop { display: flex; }
-  .inline-edit {
-    display: block; width: 100%; height: 100%;
-    margin: 0; padding: 0 4px; box-sizing: border-box;
-    border: 1.5px solid #111; border-radius: 4px; outline: none;
-    background: #fff; color: #111;
-    font: inherit;
-  }
-  .ctx-menu {
-    position: fixed; z-index: 4; display: none;
-    margin: 0; padding: 0; border: 1px solid #ddd; border-radius: 10px; background: #fff;
-    box-shadow: 0 10px 28px rgba(0,0,0,.1);
-  }
-  .ctx-menu.show { display: block; }
-  .ctx-menu .sep { height: 1px; margin: 4px 6px; background: #eee; }
-  .ctx-menu button {
-    display: flex; width: 100%; align-items: center; gap: 10px;
-    margin: 0; padding: 9px 12px; border: 0; border-radius: 0;
-    background: transparent; text-align: left;
-  }
-  .ctx-menu button:hover:not(:disabled) { background: #f3f3f3; }
-  .ctx-menu button:disabled { opacity: 0.35; cursor: default; }
-  .ctx-menu button.danger { color: #b00020; }
-  .ctx-menu button svg { width: 16px; height: 16px; flex: 0 0 auto; }
-  .ctx-menu button span { flex: 1 1 auto; }
-  .modal-backdrop {
-    position: fixed; inset: 0; z-index: 5;
-    display: none; align-items: center; justify-content: center;
-    background: rgba(255,255,255,.72);
-  }
-  .modal-backdrop.show { display: flex; }
-  .modal {
-    width: min(420px, calc(100vw - 32px));
-    padding: 20px 20px 16px;
-    border: 1px solid #ddd; border-radius: 12px; background: #fff;
-    box-shadow: 0 16px 40px rgba(0,0,0,.1);
-  }
-  .modal h2 {
-    margin: 0 0 8px;
-    font: 700 18px/1.3 "Songti SC", "STSongti-SC-Regular", serif;
-  }
-  .modal p {
-    margin: 0 0 16px;
-    font: 14px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    color: #333;
-  }
-  .modal label {
-    display: block; margin: 0 0 6px;
-    font: 13px/1.3 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    color: #555;
-  }
-  .modal input[type="text"], .modal select {
-    width: 100%; box-sizing: border-box;
-    margin: 0 0 14px; padding: 9px 10px;
-    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
-    font: 14px/1.3 "PingFang SC", "Hiragino Sans GB", sans-serif;
-  }
-  .modal select:disabled, .modal option:disabled { color: #999; }
-  .modal-actions {
-    display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;
-  }
-  .modal-actions .primary {
-    border-color: #111; background: #111; color: #fff;
-  }
-  .modal-actions .primary:hover { border-color: #000; background: #222; }
-  @media (max-width: 860px) {
-    .brand { display: none; }
-  }
-</style>
-</head>
-<body>
-<div class="toolbar">
-  <span class="brand">mm</span>
-  <button type="button" class="icon" id="uploadBtn" title="上传 Markdown" aria-label="上传">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-  </button>
-  <button type="button" class="icon" id="downloadBtn" title="下载" aria-label="下载">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-  </button>
-  <span class="sep" aria-hidden="true"></span>
-  <button type="button" class="icon" id="undoBtn" title="撤销 ⌘Z" aria-label="撤销" disabled>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a5 5 0 0 1 0 10h-1"/></svg>
-  </button>
-  <button type="button" class="icon" id="redoBtn" title="重做 ⌘⇧Z" aria-label="重做" disabled>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a5 5 0 0 0 0 10h1"/></svg>
-  </button>
-  <input id="fileInput" type="file" accept=".md,.markdown,text/markdown,text/plain">
-</div>
-<svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
-<div class="help" id="help">
-  <button type="button" class="icon" id="helpBtn" aria-label="帮助" aria-describedby="helpTip" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-  </button>
-  <div class="help-tip" id="helpTip" role="tooltip">
-    <ul>
-      <li>双击编辑标题</li>
-      <li>右键 / 长按打开菜单</li>
-      <li>菜单可设副标题（Markdown：标题 :: 副标题）</li>
-      <li>点击便签图标查看备注；双击或长按内容编辑</li>
-      <li>点击节点前 emoji 更换图标（含最近使用）</li>
-      <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
-      <li>Tab 加子节点</li>
-      <li>Enter 加同级</li>
-    </ul>
-  </div>
-</div>
-<div class="drop" id="dropHint">松开以导入 Markdown</div>
-<div class="ctx-menu" id="ctxMenu" role="menu">
-  <button type="button" data-act="rename" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-    <span>重命名</span>
-  </button>
-  <button type="button" data-act="subtitle" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/></svg>
-    <span>副标题</span>
-  </button>
-  <button type="button" data-act="note" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg>
-    <span>备注</span>
-  </button>
-  <button type="button" data-act="child" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v8a2 2 0 0 0 2 2h8"/><path d="M14 9h6v6"/><path d="m20 9-7 7"/></svg>
-    <span>子节点</span>
-  </button>
-  <button type="button" data-act="sibling" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-    <span>同级</span>
-  </button>
-  <div class="sep"></div>
-  <button type="button" class="danger" data-act="delete" role="menuitem">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-    <span>删除</span>
-  </button>
-</div>
-<div class="note-pop" id="notePop" role="dialog" aria-label="备注">
-  <div class="note-view" id="noteView"></div>
-  <textarea class="note-edit" id="noteEdit" autocomplete="off" spellcheck="true" placeholder="输入备注…"></textarea>
-  <div class="note-foot" id="noteFoot" hidden>
-    <button type="button" id="noteCancel">取消</button>
-    <button type="button" class="primary" id="noteSave">保存</button>
-  </div>
-</div>
-<div class="icon-pop" id="iconPop" role="dialog" aria-label="选择图标">
-  <div class="icon-tabs" id="iconTabs" role="tablist"></div>
-  <div class="icon-grid" id="iconGrid" role="tabpanel"></div>
-  <div class="icon-foot">
-    <button type="button" id="iconClear">清除图标</button>
-    <button type="button" id="iconClose">关闭</button>
-  </div>
-</div>
-<div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-  <div class="modal">
-    <h2 id="confirmTitle">覆盖当前导图？</h2>
-    <p id="confirmText">导入将替换当前内容。可之后撤销。</p>
-    <div class="modal-actions">
-      <button type="button" id="confirmCancel">取消</button>
-      <button type="button" class="primary" id="confirmOk">覆盖导入</button>
-    </div>
-  </div>
-</div>
-<div class="modal-backdrop" id="downloadModal" role="dialog" aria-modal="true" aria-labelledby="downloadTitle">
-  <div class="modal">
-    <h2 id="downloadTitle">下载</h2>
-    <label for="downloadName">文件名</label>
-    <input id="downloadName" type="text" autocomplete="off" spellcheck="false">
-    <label for="downloadFormat">格式</label>
-    <select id="downloadFormat"></select>
-    <div class="modal-actions">
-      <button type="button" id="downloadCancel">取消</button>
-      <button type="button" class="primary" id="downloadOk">下载</button>
-    </div>
-  </div>
-</div>
-<p class="toast" id="toast" role="status"></p>
-<script type="module">
-import {
-  DOWNLOAD_FORMATS,
-  EMOJI_CATEGORIES,
-  buildDownload,
-  captureState,
-  cloneData,
-  createHistory,
-  createLocalStore,
-  createRecentIconsStore,
-  nodeAtPath,
-  normalizeDownloadName,
-  pageTitleOf,
-  parseMarkdown,
-  pathToNode,
-  recognizeNodeTap,
-  shouldConfirmOverwrite,
-  toMarkdown,
-} from "./mm-core.js?v=20261102j";
-
-const store = createLocalStore();
-const history = createHistory();
-const recentIcons = createRecentIconsStore();
-const DEMO = {
-  title: "Markdown Mindmap",
-  subtitle: "mm.wenfu.dev",
-  icon: "🗺️",
-  open: true,
-  children: [
-    {
-      title: "上传大纲",
-      icon: "📤",
-      open: true,
-      children: [
-        { title: "# 标题 → 中心", children: [] },
-        { title: "拖放导入前会确认覆盖", children: [] },
-      ],
-    },
-    {
-      title: "编辑节点",
-      subtitle: "标题与副标题",
-      icon: "✏️",
-      open: true,
-      children: [
-        { title: "双击行内编辑", children: [] },
-        {
-          title: "右键设副标题",
-          subtitle: "导出为 标题 :: 副标题",
-          note: "也可用菜单添加备注；导出为引用块 >",
-          children: [],
-        },
-        { title: "点击前导 emoji 换图标", icon: "🎨", children: [] },
-        { title: "Tab / Enter 快捷键", children: [] },
-      ],
-    },
-    { title: "下载可选文件名与格式", icon: "⬇️", children: [] },
-  ],
-};
-
-let tree = null;
-let fileName = "mindmap.md";
-let selected = null;
-let editing = false;
-let editField = "title";
-let editInput = null;
-let ignoreBlur = false;
-let lastTap = { node: null, time: 0 };
-let pendingImportFile = null;
-let editBaseline = null;
-let longPressTimer = null;
-let longPressArmed = false;
-let suppressNextTap = false;
-let noteNode = null;
-let noteEditing = false;
-let noteBaseline = null;
-let noteLongPressTimer = null;
-let noteLastTap = { time: 0 };
-let iconNode = null;
-let iconTabId = "recent";
-
-const NS = "http://www.w3.org/2000/svg";
-const LONG_PRESS_MS = 520;
-const svg = document.getElementById("map");
-const viewport = document.createElementNS(NS, "g");
-const toastEl = document.getElementById("toast");
-const fileInput = document.getElementById("fileInput");
-const ctxMenu = document.getElementById("ctxMenu");
-const undoBtn = document.getElementById("undoBtn");
-const redoBtn = document.getElementById("redoBtn");
-const confirmModal = document.getElementById("confirmModal");
-const confirmTitle = document.getElementById("confirmTitle");
-const confirmText = document.getElementById("confirmText");
-const confirmOk = document.getElementById("confirmOk");
-const downloadModal = document.getElementById("downloadModal");
-const downloadName = document.getElementById("downloadName");
-const downloadFormat = document.getElementById("downloadFormat");
-const notePop = document.getElementById("notePop");
-const noteView = document.getElementById("noteView");
-const noteEdit = document.getElementById("noteEdit");
-const noteFoot = document.getElementById("noteFoot");
-const iconPop = document.getElementById("iconPop");
-const iconTabs = document.getElementById("iconTabs");
-const iconGrid = document.getElementById("iconGrid");
-svg.appendChild(viewport);
-
-const GAP_X = 56;
-const GAP_Y = 18;
-const SUBTITLE_SIZE = 13;
-const SUBTITLE_GAP = 4;
-const NOTE_ICON_W = 22;
-const NODE_ICON_W = 26;
-const ICON_TABS = [{ id: "recent", label: "最近" }, ...EMOJI_CATEGORIES.map((c) => ({ id: c.id, label: c.label }))];
-const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
-const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
-const styles = [
-  { size: 30, weight: 700, family: song, fill: "#111", h: 46 },
-  { size: 22, weight: 700, family: song, fill: "#111", h: 38 },
-  { size: 17, weight: 600, family: song, fill: "#111", h: 34 },
-  { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
-  { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
-];
-
-function subtitleText(node) {
-  return node && node.subtitle ? String(node.subtitle).trim() : "";
-}
-
-function nodeShowsSubtitle(node) {
-  if (!node) return false;
-  if (subtitleText(node)) return true;
-  return editing && selected === node && editField === "subtitle";
-}
-
-function noteText(node) {
-  return node && node.note != null ? String(node.note) : "";
-}
-
-function nodeHasNote(node) {
-  return !!(node && String(node.note || "").trim());
-}
-
-function iconText(node) {
-  return node && node.icon ? String(node.icon).trim() : "";
-}
-
-DOWNLOAD_FORMATS.forEach((format) => {
-  const option = document.createElement("option");
-  option.value = format.id;
-  option.textContent = format.available ? format.label : `${format.label}（即将支持）`;
-  option.disabled = !format.available;
-  if (format.available) option.selected = true;
-  downloadFormat.appendChild(option);
-});
-
-function toast(message) {
-  toastEl.textContent = message;
-  toastEl.classList.add("show");
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toastEl.classList.remove("show"), 2200);
-}
-
-function saveLocal() {
-  store.save(fileName, tree);
-}
-
-function currentSnapshot() {
-  return captureState(tree, fileName, selected);
-}
-
-function pushHistory() {
-  history.push(currentSnapshot());
-  updateHistoryChrome();
-}
-
-function updateHistoryChrome() {
-  undoBtn.disabled = !history.canUndo();
-  redoBtn.disabled = !history.canRedo();
-}
-
-function restoreSnapshot(snapshot) {
-  if (!snapshot) return;
-  if (editing) {
-    editing = false;
-    editInput = null;
-    editBaseline = null;
-  }
-  tree = cloneData(snapshot.tree);
-  fileName = snapshot.fileName || fileName;
-  prepare(tree, true);
-  selected = snapshot.selectedPath ? nodeAtPath(tree, snapshot.selectedPath) : null;
-  document.title = pageTitleOf(tree) + " · mm";
-  svg.setAttribute("aria-label", pageTitleOf(tree));
-  frame();
-  saveLocal();
-  updateHistoryChrome();
-}
-
-function undo() {
-  if (editing) commitEdit(true);
-  if (!history.canUndo()) return;
-  const previous = history.undo(currentSnapshot());
-  restoreSnapshot(previous);
-  toast("已撤销");
-}
-
-function redo() {
-  if (editing) commitEdit(true);
-  if (!history.canRedo()) return;
-  const next = history.redo(currentSnapshot());
-  restoreSnapshot(next);
-  toast("已重做");
-}
-
-function walk(node, depth, visit) {
-  visit(node, depth);
-  node.children.forEach((child) => walk(child, depth + 1, visit));
-}
-
-function prepare(node, keepOpen) {
-  walk(node, 0, (item, depth) => {
-    item.depth = depth;
-    if (!keepOpen || item.open === undefined) item.open = depth < 2;
-  });
-}
-
-function refreshDepth(node, depth) {
-  node.depth = depth;
-  node.children.forEach((child) => refreshDepth(child, depth + 1));
-}
-
-function locate(target, node = tree, parent = null, index = -1) {
-  if (node === target) return { node, parent, index };
-  for (let i = 0; i < node.children.length; i++) {
-    const found = locate(target, node.children[i], node, i);
-    if (found) return found;
-  }
-  return null;
-}
-
-function updateChrome() {
-  updateHistoryChrome();
-  updateCtxMenuChrome();
-}
-
-function updateCtxMenuChrome() {
-  const has = !!selected && !editing;
-  const isRoot = selected === tree;
-  ctxMenu.querySelector('[data-act="rename"]').disabled = !has;
-  ctxMenu.querySelector('[data-act="subtitle"]').disabled = !has;
-  ctxMenu.querySelector('[data-act="note"]').disabled = !has;
-  ctxMenu.querySelector('[data-act="child"]').disabled = !has;
-  ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
-  ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
-}
-
-function selectNode(node) {
-  if (editing) commitEdit(true);
-  selected = node || null;
-  updateChrome();
-  draw();
-}
-
-const measureCanvas = document.createElement("canvas").getContext("2d");
-function textWidth(text, font) {
-  measureCanvas.font = font;
-  return Math.ceil(measureCanvas.measureText(text).width);
-}
-
-function layout(node) {
-  const depth = Math.min(node.depth, styles.length - 1);
-  node.style = styles[depth];
-  const editingHere = editing && node === selected && editInput;
-  const title = editingHere && editField === "title"
-    ? (editInput.value || " ")
-    : (node.title || " ");
-  const subtitle = editingHere && editField === "subtitle"
-    ? (editInput.value || "")
-    : subtitleText(node);
-  const showSub = !!(subtitle || (editingHere && editField === "subtitle"));
-  node.labelW = textWidth(title, node.style.weight + " " + node.style.size + "px " + node.style.family);
-  if (showSub) {
-    const subW = textWidth(subtitle || " ", "400 " + SUBTITLE_SIZE + "px " + sans);
-    node.labelW = Math.max(node.labelW, subW);
-    node.h = node.style.h + SUBTITLE_SIZE + SUBTITLE_GAP;
-  } else {
-    node.h = node.style.h;
-  }
-  node.hasChildren = node.children.length > 0;
-  node.marker = node.hasChildren && !node.open ? node.children.length : 0;
-  node.markerW = node.hasChildren ? 24 + (node.marker ? textWidth(String(node.marker), "400 13px " + sans) + 8 : 0) : 0;
-  node.iconW = NODE_ICON_W;
-  node.noteW = nodeHasNote(node) ? NOTE_ICON_W : 0;
-  node.w = node.iconW + node.labelW + node.noteW + node.markerW;
-  if (!node.open || !node.hasChildren) {
-    node.subtreeH = node.h;
-    return;
-  }
-  node.children.forEach(layout);
-  const inner = node.children.reduce((sum, child) => sum + child.subtreeH, 0) + GAP_Y * (node.children.length - 1);
-  node.subtreeH = Math.max(node.h, inner);
-}
-
-function place(node, x, top) {
-  node.x = x;
-  if (!node.open || !node.hasChildren) {
-    node.y = top + (node.subtreeH - node.h) / 2;
-    return;
-  }
-  const inner = node.children.reduce((sum, child) => sum + child.subtreeH, 0) + GAP_Y * (node.children.length - 1);
-  let y = top + (node.subtreeH - inner) / 2;
-  node.children.forEach((child) => {
-    place(child, x + node.w + GAP_X, y);
-    y += child.subtreeH + GAP_Y;
-  });
-  const first = node.children[0];
-  const last = node.children[node.children.length - 1];
-  const mid = (first.y + first.h / 2 + last.y + last.h / 2) / 2;
-  node.y = mid - node.h / 2;
-}
-
-let tx = 48;
-let ty = 36;
-let scale = 1;
-
-function screenPoint(x, y) {
-  return { x: tx + x * scale, y: ty + y * scale };
-}
-
-function hideCtxMenu() {
-  ctxMenu.classList.remove("show");
-}
-
-function clearNoteLongPress() {
-  if (noteLongPressTimer) {
-    clearTimeout(noteLongPressTimer);
-    noteLongPressTimer = null;
-  }
-}
-
-function positionNotePop(anchor) {
-  const pad = 8;
-  const width = notePop.offsetWidth || 280;
-  const height = notePop.offsetHeight || 160;
-  let left = anchor.left;
-  let top = anchor.bottom + 8;
-  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
-  if (top + height > window.innerHeight - pad) top = Math.max(pad, anchor.top - height - 8);
-  if (left < pad) left = pad;
-  if (top < pad) top = pad;
-  notePop.style.left = `${left}px`;
-  notePop.style.top = `${top}px`;
-}
-
-function noteAnchorRect() {
-  if (!noteNode || !noteNode.style) {
-    return { left: window.innerWidth / 2 - 140, top: 80, bottom: 100 };
-  }
-  const x = noteNode.x + (noteNode.iconW || 0) + noteNode.labelW + 4;
-  const y = noteNode.y + noteNode.h / 2;
-  const pt = screenPoint(x, y);
-  return { left: pt.x, top: pt.y - 10, bottom: pt.y + 10 };
-}
-
-function syncNotePopContent() {
-  const text = noteText(noteNode);
-  noteView.textContent = text;
-  noteEdit.value = text;
-  notePop.classList.toggle("editing", noteEditing);
-  noteFoot.hidden = !noteEditing;
-}
-
-function openNote(node, { edit = false, clientX, clientY } = {}) {
-  if (!node) return;
-  if (editing) commitEdit(true);
-  hideCtxMenu();
-  hideIconPop();
-  if (noteNode && noteNode !== node && noteEditing) commitNote(true);
-  selected = node;
-  noteNode = node;
-  noteEditing = !!edit;
-  noteBaseline = noteEditing ? currentSnapshot() : null;
-  noteLastTap = { time: 0 };
-  syncNotePopContent();
-  notePop.classList.add("show");
-  const anchor = clientX != null
-    ? { left: clientX, top: clientY, bottom: clientY }
-    : noteAnchorRect();
-  positionNotePop(anchor);
-  updateChrome();
-  draw();
-  if (noteEditing) {
-    requestAnimationFrame(() => {
-      noteEdit.focus();
-      noteEdit.setSelectionRange(noteEdit.value.length, noteEdit.value.length);
-    });
-  }
-}
-
-function beginNoteEdit() {
-  if (!noteNode || noteEditing) return;
-  noteEditing = true;
-  noteBaseline = currentSnapshot();
-  syncNotePopContent();
-  positionNotePop(noteAnchorRect());
-  requestAnimationFrame(() => {
-    noteEdit.focus();
-    noteEdit.select();
-  });
-}
-
-function commitNote(save) {
-  if (!noteNode) {
-    hideNotePop();
-    return;
-  }
-  const node = noteNode;
-  const normalized = noteEdit.value.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").replace(/^\n+|\n+$/g, "");
-  const prev = noteText(node);
-  const changed = save && normalized !== prev;
-  if (save && changed) {
-    if (noteBaseline) history.push(noteBaseline);
-    if (normalized) node.note = normalized;
-    else delete node.note;
-  }
-  noteEditing = false;
-  noteBaseline = null;
-  noteNode = null;
-  notePop.classList.remove("show", "editing");
-  noteFoot.hidden = true;
-  relayout(node);
-  saveLocal();
-  updateHistoryChrome();
-}
-
-function hideNotePop({ save = true } = {}) {
-  if (!notePop.classList.contains("show")) return;
-  if (noteEditing && save) {
-    commitNote(true);
-    return;
-  }
-  noteEditing = false;
-  noteBaseline = null;
-  noteNode = null;
-  notePop.classList.remove("show", "editing");
-  noteFoot.hidden = true;
-}
-
-function isSecondaryPointer(event) {
-  return event.button === 2 || (event.button === 0 && event.ctrlKey);
-}
-
-function hideIconPop() {
-  iconPop.classList.remove("show");
-  iconNode = null;
-}
-
-function positionIconPop(anchor) {
-  const pad = 8;
-  const width = iconPop.offsetWidth || 360;
-  const height = iconPop.offsetHeight || 320;
-  let left = anchor.left;
-  let top = anchor.bottom + 8;
-  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
-  if (top + height > window.innerHeight - pad) top = Math.max(pad, anchor.top - height - 8);
-  if (left < pad) left = pad;
-  if (top < pad) top = pad;
-  iconPop.style.left = `${left}px`;
-  iconPop.style.top = `${top}px`;
-}
-
-function emojisForTab(tabId) {
-  if (tabId === "recent") return recentIcons.load();
-  const cat = EMOJI_CATEGORIES.find((item) => item.id === tabId);
-  return cat ? cat.emojis : [];
-}
-
-function renderIconPicker() {
-  iconTabs.replaceChildren();
-  ICON_TABS.forEach((tab) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.setAttribute("role", "tab");
-    btn.textContent = tab.label;
-    btn.className = tab.id === iconTabId ? "active" : "";
-    btn.setAttribute("aria-selected", tab.id === iconTabId ? "true" : "false");
-    btn.addEventListener("click", () => {
-      iconTabId = tab.id;
-      renderIconPicker();
-    });
-    iconTabs.appendChild(btn);
-  });
-
-  const emojis = emojisForTab(iconTabId);
-  iconGrid.replaceChildren();
-  if (!emojis.length) {
-    const empty = document.createElement("p");
-    empty.className = "icon-empty";
-    empty.textContent = iconTabId === "recent" ? "还没有最近使用，选一个会出现在这里" : "暂无图标";
-    iconGrid.appendChild(empty);
-    return;
-  }
-  emojis.forEach((emoji) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = emoji;
-    btn.title = emoji;
-    btn.addEventListener("click", () => applyNodeIcon(emoji));
-    iconGrid.appendChild(btn);
-  });
-}
-
-function openIconPicker(node, event) {
-  if (!node) return;
-  if (editing) commitEdit(true);
-  hideCtxMenu();
-  hideNotePop({ save: true });
-  selected = node;
-  iconNode = node;
-  if (iconTabId !== "recent" && !recentIcons.load().length) iconTabId = "recent";
-  // Prefer recent tab when opening so用户先看到最近使用
-  iconTabId = "recent";
-  renderIconPicker();
-  iconPop.classList.add("show");
-  const anchor = event
-    ? { left: event.clientX, top: event.clientY, bottom: event.clientY }
-    : (() => {
-      const pt = screenPoint(node.x, node.y + node.h / 2);
-      return { left: pt.x, top: pt.y - 12, bottom: pt.y + 12 };
-    })();
-  positionIconPop(anchor);
-  updateChrome();
-  draw();
-}
-
-function applyNodeIcon(emoji) {
-  if (!iconNode) return;
-  const node = iconNode;
-  const next = String(emoji || "").trim();
-  const prev = iconText(node);
-  if (next === prev) {
-    hideIconPop();
-    draw();
-    return;
-  }
-  pushHistory();
-  if (next) {
-    node.icon = next;
-    recentIcons.push(next);
-  } else {
-    delete node.icon;
-  }
-  hideIconPop();
-  relayout(node);
-  saveLocal();
-}
-
-function clearNodeIcon() {
-  applyNodeIcon("");
-}
-
-function showCtxMenu(clientX, clientY, node) {
-  if (!node || editing) return;
-  clearLongPress();
-  hideNotePop({ save: true });
-  hideIconPop();
-  if (selected !== node) {
-    selected = node;
-    lastTap = { node: null, time: 0 };
-    draw();
-  } else {
-    updateChrome();
-  }
-  updateCtxMenuChrome();
-  ctxMenu.classList.add("show");
-  const pad = 8;
-  const width = ctxMenu.offsetWidth || 180;
-  const height = ctxMenu.offsetHeight || 180;
-  let left = clientX;
-  let top = clientY;
-  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
-  if (top + height > window.innerHeight - pad) top = window.innerHeight - height - pad;
-  if (left < pad) left = pad;
-  if (top < pad) top = pad;
-  ctxMenu.style.left = `${left}px`;
-  ctxMenu.style.top = `${top}px`;
-}
-
-function nodeFromEventTarget(target) {
-  const host = target && target.closest && target.closest("[data-node-path]");
-  if (!host) return null;
-  const raw = host.getAttribute("data-node-path");
-  if (raw === "") return tree;
-  return nodeAtPath(tree, raw.split(",").map(Number));
-}
-
-function clearLongPress() {
-  if (longPressTimer) {
-    clearTimeout(longPressTimer);
-    longPressTimer = null;
-  }
-  longPressArmed = false;
-}
-
-function draw() {
-  const activeValue = editing && editInput ? editInput.value : null;
-  const selectionStart = editing && editInput ? editInput.selectionStart : null;
-  const selectionEnd = editing && editInput ? editInput.selectionEnd : null;
-
-  viewport.replaceChildren();
-  const links = document.createElementNS(NS, "g");
-  const nodes = document.createElementNS(NS, "g");
-  viewport.append(links, nodes);
-
-  function visit(node) {
-    if (!node.style) return;
-    if (node.open) {
-      node.children.forEach((child) => {
-        if (!child.style) return;
-        const x1 = node.x + node.w;
-        const y1 = node.y + node.h / 2;
-        const x2 = child.x;
-        const y2 = child.y + child.h / 2;
-        const bend = Math.max(20, (x2 - x1) * 0.46);
-        const path = document.createElementNS(NS, "path");
-        path.setAttribute("d", "M " + x1 + " " + y1 + " C " + (x1 + bend) + " " + y1 + ", " + (x2 - bend) + " " + y2 + ", " + x2 + " " + y2);
-        path.setAttribute("fill", "none");
-        path.setAttribute("stroke", "#111");
-        path.setAttribute("stroke-width", node.depth === 0 ? 1.6 : 1);
-        links.appendChild(path);
-        visit(child);
-      });
-    }
-
-    const group = document.createElementNS(NS, "g");
-    group.style.cursor = "pointer";
-    const nodePath = pathToNode(tree, node);
-    group.setAttribute("data-node-path", nodePath ? nodePath.join(",") : "");
-    const isEditingNode = editing && node === selected;
-    const showSub = nodeShowsSubtitle(node);
-    const contentH = showSub ? node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE : node.style.size;
-    const contentTop = node.y + (node.h - contentH) / 2;
-    const titleY = contentTop + node.style.size / 2;
-    const subY = contentTop + node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE / 2;
-    const textX = node.x + (node.iconW || 0);
-    const bodyW = (node.iconW || 0) + node.labelW;
-
-    if (node === selected || isEditingNode || iconNode === node) {
-      const sel = document.createElementNS(NS, "rect");
-      sel.setAttribute("x", node.x - 10);
-      sel.setAttribute("y", node.y + 2);
-      sel.setAttribute("width", Math.max(bodyW, 48) + 20);
-      sel.setAttribute("height", node.h - 4);
-      sel.setAttribute("rx", 4);
-      sel.setAttribute("fill", "#f0f0f0");
-      group.appendChild(sel);
-    }
-
-    {
-      const iconHit = document.createElementNS(NS, "rect");
-      iconHit.setAttribute("x", node.x - 2);
-      iconHit.setAttribute("y", node.y + 2);
-      iconHit.setAttribute("width", node.iconW || NODE_ICON_W);
-      iconHit.setAttribute("height", node.h - 4);
-      iconHit.setAttribute("fill", "transparent");
-      iconHit.style.cursor = "pointer";
-      iconHit.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (isSecondaryPointer(event)) return;
-        event.preventDefault();
-        openIconPicker(node, event);
-      });
-      group.appendChild(iconHit);
-
-      const iconLabel = document.createElementNS(NS, "text");
-      iconLabel.setAttribute("x", node.x + (node.iconW || NODE_ICON_W) / 2 - 1);
-      iconLabel.setAttribute("y", node.y + node.h / 2);
-      iconLabel.setAttribute("text-anchor", "middle");
-      iconLabel.setAttribute("dominant-baseline", "central");
-      iconLabel.setAttribute("font-size", Math.max(14, Math.min(18, node.style.size - 2)));
-      iconLabel.style.pointerEvents = "none";
-      if (iconText(node)) {
-        iconLabel.textContent = iconText(node);
-      } else {
-        iconLabel.textContent = "○";
-        iconLabel.setAttribute("fill", "#bbb");
-        iconLabel.setAttribute("font-family", sans);
-        iconLabel.setAttribute("font-size", 12);
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Markdown Mindmap</title>
+    <meta
+      name="description"
+      content="把 Markdown 大纲转成可交互思维导图。支持行内编辑、本地缓存、上传下载。"
+    />
+    <link rel="canonical" href="https://mm.wenfu.dev/" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+        color: #111;
+        overflow: hidden;
       }
-      group.appendChild(iconLabel);
-    }
-
-    if (!isEditingNode) {
-      const hit = document.createElementNS(NS, "rect");
-      hit.setAttribute("x", textX - 4);
-      hit.setAttribute("y", node.y);
-      hit.setAttribute("width", Math.max(node.labelW, 12) + 8);
-      hit.setAttribute("height", node.h);
-      hit.setAttribute("fill", "transparent");
-      group.appendChild(hit);
-
-      const label = document.createElementNS(NS, "text");
-      label.setAttribute("x", textX);
-      label.setAttribute("y", titleY);
-      label.setAttribute("dominant-baseline", "central");
-      label.setAttribute("fill", node.style.fill);
-      label.setAttribute("font-family", node.style.family);
-      label.setAttribute("font-size", node.style.size);
-      label.setAttribute("font-weight", node.style.weight);
-      label.textContent = node.title;
-      group.appendChild(label);
-
-      if (showSub) {
-        const sub = document.createElementNS(NS, "text");
-        sub.setAttribute("x", textX);
-        sub.setAttribute("y", subY);
-        sub.setAttribute("dominant-baseline", "central");
-        sub.setAttribute("fill", "#888");
-        sub.setAttribute("font-family", sans);
-        sub.setAttribute("font-size", SUBTITLE_SIZE);
-        sub.setAttribute("font-weight", 400);
-        sub.textContent = subtitleText(node);
-        group.appendChild(sub);
+      svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        cursor: grab;
       }
-    } else {
-      const editW = Math.max(node.labelW + 28, 72);
-      const editingTitle = editField === "title";
-      const editingSub = editField === "subtitle";
-
-      if (editingTitle) {
-        const fo = document.createElementNS(NS, "foreignObject");
-        fo.setAttribute("x", textX - 6);
-        fo.setAttribute("y", contentTop - 2);
-        fo.setAttribute("width", editW);
-        fo.setAttribute("height", node.style.size + 8);
-        const input = document.createElement("input");
-        input.className = "inline-edit";
-        input.type = "text";
-        input.autocomplete = "off";
-        input.spellcheck = false;
-        input.value = activeValue != null ? activeValue : node.title;
-        input.style.fontFamily = node.style.family;
-        input.style.fontSize = node.style.size + "px";
-        input.style.fontWeight = node.style.weight;
-        fo.appendChild(input);
-        group.appendChild(fo);
-        editInput = input;
-      } else {
-        const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", textX);
-        label.setAttribute("y", titleY);
-        label.setAttribute("dominant-baseline", "central");
-        label.setAttribute("fill", node.style.fill);
-        label.setAttribute("font-family", node.style.family);
-        label.setAttribute("font-size", node.style.size);
-        label.setAttribute("font-weight", node.style.weight);
-        label.textContent = node.title;
-        group.appendChild(label);
+      svg.dragging {
+        cursor: grabbing;
       }
-
-      if (editingSub) {
-        const fo = document.createElementNS(NS, "foreignObject");
-        fo.setAttribute("x", textX - 6);
-        fo.setAttribute("y", contentTop + node.style.size + SUBTITLE_GAP - 2);
-        fo.setAttribute("width", editW);
-        fo.setAttribute("height", SUBTITLE_SIZE + 8);
-        const input = document.createElement("input");
-        input.className = "inline-edit";
-        input.type = "text";
-        input.autocomplete = "off";
-        input.spellcheck = false;
-        input.placeholder = "副标题";
-        input.value = activeValue != null ? activeValue : subtitleText(node);
-        input.style.fontFamily = sans;
-        input.style.fontSize = SUBTITLE_SIZE + "px";
-        input.style.fontWeight = 400;
-        fo.appendChild(input);
-        group.appendChild(fo);
-        editInput = input;
-      } else if (showSub) {
-        const sub = document.createElementNS(NS, "text");
-        sub.setAttribute("x", textX);
-        sub.setAttribute("y", subY);
-        sub.setAttribute("dominant-baseline", "central");
-        sub.setAttribute("fill", "#888");
-        sub.setAttribute("font-family", sans);
-        sub.setAttribute("font-size", SUBTITLE_SIZE);
-        sub.setAttribute("font-weight", 400);
-        sub.textContent = subtitleText(node);
-        group.appendChild(sub);
+      .toolbar {
+        position: fixed;
+        top: 12px;
+        left: 14px;
+        z-index: 2;
+        display: flex;
+        gap: 8px;
+        align-items: center;
       }
-
-      if (editInput) {
-        const input = editInput;
-        const fo = input.parentNode;
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commitEdit(true);
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            commitEdit(false);
-          } else if (event.key === "Tab" && editField === "title") {
-            event.preventDefault();
-            commitEdit(true);
-            addChild(selected);
-          }
-        });
-        input.addEventListener("input", () => {
-          const value = input.value || " ";
-          if (editField === "title") {
-            node.labelW = textWidth(value, node.style.weight + " " + node.style.size + "px " + node.style.family);
-            const subW = subtitleText(node)
-              ? textWidth(subtitleText(node), "400 " + SUBTITLE_SIZE + "px " + sans)
-              : 0;
-            node.labelW = Math.max(node.labelW, subW);
-          } else {
-            const titleW = textWidth(node.title || " ", node.style.weight + " " + node.style.size + "px " + node.style.family);
-            const subW = textWidth(value, "400 " + SUBTITLE_SIZE + "px " + sans);
-            node.labelW = Math.max(titleW, subW);
-          }
-          fo.setAttribute("width", Math.max(node.labelW + 28, 72));
-        });
-        input.addEventListener("blur", () => {
-          if (ignoreBlur) return;
-          commitEdit(true);
-        });
-
-        requestAnimationFrame(() => {
-          if (!editInput) return;
-          editInput.focus();
-          if (selectionStart != null && selectionEnd != null) {
-            try { editInput.setSelectionRange(selectionStart, selectionEnd); }
-            catch (_) { editInput.select(); }
-          } else {
-            editInput.select();
-          }
-        });
+      .brand {
+        margin: 0 6px 0 0;
+        font:
+          700 15px/1 "Songti SC",
+          "STSongti-SC-Regular",
+          "Noto Serif SC",
+          serif;
+        letter-spacing: 0.02em;
+        color: #111;
+        user-select: none;
       }
-    }
-
-    if (node.noteW) {
-      const nx = node.x + (node.iconW || 0) + node.labelW + 11;
-      const ny = node.y + node.h / 2;
-      const noteIcon = document.createElementNS(NS, "g");
-      noteIcon.style.cursor = "pointer";
-      const noteHit = document.createElementNS(NS, "circle");
-      noteHit.setAttribute("cx", nx);
-      noteHit.setAttribute("cy", ny);
-      noteHit.setAttribute("r", 10);
-      noteHit.setAttribute("fill", "transparent");
-      noteIcon.appendChild(noteHit);
-      const paper = document.createElementNS(NS, "path");
-      paper.setAttribute(
-        "d",
-        `M ${nx - 5} ${ny - 6} h 7 l 3 3 v 9 h -10 z M ${nx + 2} ${ny - 6} v 3 h 3`,
-      );
-      paper.setAttribute("fill", noteNode === node && notePop.classList.contains("show") ? "#eee" : "#fff");
-      paper.setAttribute("stroke", "#666");
-      paper.setAttribute("stroke-width", 1.2);
-      paper.setAttribute("stroke-linejoin", "round");
-      noteIcon.appendChild(paper);
-      noteIcon.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (isSecondaryPointer(event)) return;
-        event.preventDefault();
-        openNote(node, { edit: false, clientX: event.clientX, clientY: event.clientY });
-      });
-      group.appendChild(noteIcon);
-    }
-
-    if (node.hasChildren) {
-      const baseRight = (node.iconW || 0) + (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + (node.noteW || 0);
-      const mx = node.x + baseRight + 16;
-      const my = node.y + node.h / 2;
-      const mark = document.createElementNS(NS, "circle");
-      mark.setAttribute("cx", mx);
-      mark.setAttribute("cy", my);
-      mark.setAttribute("r", 7);
-      mark.setAttribute("fill", "#fff");
-      mark.setAttribute("stroke", "#111");
-      mark.setAttribute("stroke-width", 1.2);
-      group.appendChild(mark);
-      const hline = document.createElementNS(NS, "path");
-      hline.setAttribute("d", "M " + (mx - 3.2) + " " + my + " H " + (mx + 3.2));
-      hline.setAttribute("stroke", "#111");
-      hline.setAttribute("stroke-width", 1.2);
-      hline.setAttribute("fill", "none");
-      group.appendChild(hline);
-      if (!node.open) {
-        const vline = document.createElementNS(NS, "path");
-        vline.setAttribute("d", "M " + mx + " " + (my - 3.2) + " V " + (my + 3.2));
-        vline.setAttribute("stroke", "#111");
-        vline.setAttribute("stroke-width", 1.2);
-        vline.setAttribute("fill", "none");
-        group.appendChild(vline);
+      .toolbar button,
+      .ctx-menu button,
+      .modal button,
+      .modal-actions button {
+        margin: 0;
+        padding: 7px 12px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        color: #111;
+        font:
+          13px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        cursor: pointer;
       }
-      if (node.marker) {
-        const count = document.createElementNS(NS, "text");
-        count.setAttribute("x", mx + 14);
-        count.setAttribute("y", my);
-        count.setAttribute("dominant-baseline", "central");
-        count.setAttribute("fill", "#888");
-        count.setAttribute("font-family", sans);
-        count.setAttribute("font-size", 13);
-        count.setAttribute("font-weight", 400);
-        count.textContent = String(node.marker);
-        group.appendChild(count);
+      .toolbar button {
+        border-color: transparent;
+        background: transparent;
       }
-      if (!isEditingNode) {
-        const markHit = document.createElementNS(NS, "circle");
-        markHit.setAttribute("cx", mx);
-        markHit.setAttribute("cy", my);
-        markHit.setAttribute("r", 12);
-        markHit.setAttribute("fill", "transparent");
-        markHit.style.cursor = "pointer";
-        markHit.addEventListener("pointerdown", (event) => {
-          event.stopPropagation();
-          if (isSecondaryPointer(event)) return;
-          armDrag(event, node, "toggle");
-        });
-        group.appendChild(markHit);
+      .toolbar button:hover:not(:disabled),
+      .ctx-menu button:hover:not(:disabled),
+      .modal button:hover:not(:disabled) {
+        border-color: #999;
       }
-    }
-
-    if (!isEditingNode) {
-      group.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (isSecondaryPointer(event)) return;
-        armDrag(event, node, "select");
-        if (event.pointerType === "touch") {
-          clearLongPress();
-          longPressArmed = true;
-          const x = event.clientX;
-          const y = event.clientY;
-          longPressTimer = setTimeout(() => {
-            if (!longPressArmed || (drag && drag.moved)) return;
-            longPressArmed = false;
-            longPressTimer = null;
-            suppressNextTap = true;
-            drag = null;
-            svg.classList.remove("dragging");
-            try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
-            showCtxMenu(x, y, node);
-          }, LONG_PRESS_MS);
+      .toolbar button:hover:not(:disabled) {
+        border-color: transparent;
+        background: #f3f3f3;
+      }
+      .toolbar button.icon {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .toolbar button.icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .toolbar button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .toolbar input[type="file"] {
+        display: none;
+      }
+      .mode-switch {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        height: 30px;
+        padding: 2px;
+        border-radius: 8px;
+        background: #f3f3f3;
+      }
+      .toolbar .mode-switch button {
+        height: 26px;
+        margin: 0;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #777;
+        font:
+          13px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+      }
+      .toolbar .mode-switch button:hover:not(:disabled) {
+        border-color: transparent;
+        background: transparent;
+        color: #111;
+      }
+      .toolbar .mode-switch button[aria-checked="true"] {
+        background: #fff;
+        color: #111;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
+      .toolbar .mode-switch button[aria-checked="true"]:hover:not(:disabled) {
+        background: #fff;
+        color: #111;
+      }
+      .toolbar .mode-switch button:focus-visible {
+        outline: 2px solid #111;
+        outline-offset: 1px;
+      }
+      .toolbar .sep {
+        width: 1px;
+        height: 18px;
+        margin: 0 2px;
+        background: #e5e5e5;
+      }
+      #map {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .help {
+        position: fixed;
+        top: 12px;
+        right: 14px;
+        z-index: 2;
+      }
+      .help > button.icon {
+        margin: 0;
+        padding: 0;
+        width: 34px;
+        height: 34px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #111;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .help > button.icon:hover {
+        background: #f3f3f3;
+      }
+      .help > button.icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .help-tip {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: max-content;
+        max-width: min(280px, calc(100vw - 28px));
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        color: #333;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+        font:
+          13px/1.45 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-2px);
+        transition:
+          opacity 0.15s,
+          transform 0.15s,
+          visibility 0.15s;
+      }
+      .help-tip ul {
+        margin: 0;
+        padding: 0 0 0 1.1em;
+      }
+      .help-tip li {
+        margin: 0;
+        padding: 2px 0;
+      }
+      .note-pop {
+        position: fixed;
+        z-index: 4;
+        display: none;
+        width: min(320px, calc(100vw - 24px));
+        margin: 0;
+        padding: 0;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+        color: #222;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        overflow: hidden;
+      }
+      .note-pop.show {
+        display: block;
+      }
+      .note-pop .note-view {
+        margin: 0;
+        padding: 12px 14px;
+        min-height: 72px;
+        max-height: 240px;
+        overflow: auto;
+        font:
+          13px/1.5 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #333;
+        cursor: text;
+      }
+      .note-pop .note-view:empty::before {
+        content: "暂无备注，双击或长按编辑";
+        color: #aaa;
+      }
+      body[data-mode="view"] .note-pop .note-view {
+        cursor: default;
+      }
+      body[data-mode="view"] .note-pop .note-view:empty::before {
+        content: "暂无备注";
+      }
+      .note-pop .note-edit {
+        display: none;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 12px 14px;
+        border: 0;
+        outline: none;
+        resize: vertical;
+        min-height: 120px;
+        max-height: 280px;
+        font:
+          13px/1.5 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        color: #222;
+        background: #fff;
+      }
+      .note-pop.editing .note-view {
+        display: none;
+      }
+      .note-pop.editing .note-edit {
+        display: block;
+      }
+      .note-pop .note-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 10px;
+        border-top: 1px solid #eee;
+        background: #fafafa;
+      }
+      .note-pop .note-foot button {
+        margin: 0;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        color: #111;
+        font:
+          12px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        cursor: pointer;
+      }
+      .note-pop .note-foot button.primary {
+        border-color: #111;
+        background: #111;
+        color: #fff;
+      }
+      .note-pop .note-foot button:hover {
+        border-color: #999;
+      }
+      .note-pop .note-foot button.primary:hover {
+        border-color: #000;
+        background: #222;
+      }
+      .icon-pop {
+        position: fixed;
+        z-index: 4;
+        display: none;
+        width: min(400px, calc(100vw - 24px));
+        margin: 0;
+        padding: 0;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+        color: #222;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        overflow: hidden;
+      }
+      .icon-pop.show {
+        display: flex;
+        flex-direction: column;
+        height: min(420px, calc(100vh - 24px));
+      }
+      .icon-pop .icon-search {
+        display: block;
+        box-sizing: border-box;
+        width: calc(100% - 16px);
+        margin: 8px 8px 0;
+        padding: 7px 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        color: #111;
+        font:
+          13px/1.3 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+      }
+      .icon-pop .icon-search:focus {
+        outline: none;
+        border-color: #111;
+      }
+      .icon-pop .icon-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 2px;
+        flex: 0 0 auto;
+        overflow-x: auto;
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+        scrollbar-width: thin;
+      }
+      .icon-pop .icon-tabs button {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: #666;
+        font:
+          12px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .icon-pop .icon-tabs button.active {
+        background: #f3f3f3;
+        color: #111;
+        font-weight: 600;
+      }
+      .icon-pop .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 40px);
+        grid-auto-rows: 40px;
+        justify-content: start;
+        align-content: start;
+        gap: 2px;
+        padding: 8px;
+        overflow: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .icon-pop .icon-grid button {
+        margin: 0;
+        padding: 0;
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        overflow: hidden;
+      }
+      .icon-pop .icon-grid button:hover {
+        background: #f3f3f3;
+      }
+      .icon-pop .icon-empty {
+        grid-column: 1 / -1;
+        margin: 0;
+        padding: 48px 20px;
+        text-align: center;
+        color: #999;
+        font:
+          13px/1.5 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        white-space: normal;
+      }
+      .icon-pop .icon-foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-top: 1px solid #eee;
+        background: #fafafa;
+      }
+      .icon-pop .icon-foot button {
+        margin: 0;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        color: #111;
+        font:
+          12px/1 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        cursor: pointer;
+      }
+      .icon-pop .icon-foot button:hover {
+        border-color: #999;
+      }
+      .help:hover .help-tip,
+      .help:focus-within .help-tip,
+      .help.open .help-tip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 8px 14px;
+        border-radius: 6px;
+        background: #111;
+        color: #fff;
+        font:
+          13px/1.4 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 6;
+      }
+      .toast.show {
+        opacity: 1;
+      }
+      .drop {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.82);
+        border: 2px dashed #111;
+        box-sizing: border-box;
+        font:
+          18px/1.4 "Songti SC",
+          "STSongti-SC-Regular",
+          serif;
+        color: #111;
+        pointer-events: none;
+      }
+      body.dragging-file .drop {
+        display: flex;
+      }
+      .inline-edit {
+        display: block;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0 4px;
+        box-sizing: border-box;
+        border: 1.5px solid #111;
+        border-radius: 4px;
+        outline: none;
+        background: #fff;
+        color: #111;
+        font: inherit;
+      }
+      .ctx-menu {
+        position: fixed;
+        z-index: 4;
+        display: none;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+      }
+      .ctx-menu.show {
+        display: block;
+      }
+      .ctx-menu .sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: #eee;
+      }
+      .ctx-menu button {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        padding: 9px 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+      }
+      .ctx-menu button:hover:not(:disabled) {
+        background: #f3f3f3;
+      }
+      .ctx-menu button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .ctx-menu button.danger {
+        color: #b00020;
+      }
+      .ctx-menu button svg {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+      }
+      .ctx-menu button span {
+        flex: 1 1 auto;
+      }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .modal-backdrop.show {
+        display: flex;
+      }
+      .modal {
+        width: min(420px, calc(100vw - 32px));
+        padding: 20px 20px 16px;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+      }
+      .modal h2 {
+        margin: 0 0 8px;
+        font:
+          700 18px/1.3 "Songti SC",
+          "STSongti-SC-Regular",
+          serif;
+      }
+      .modal p {
+        margin: 0 0 16px;
+        font:
+          14px/1.5 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        color: #333;
+      }
+      .modal label {
+        display: block;
+        margin: 0 0 6px;
+        font:
+          13px/1.3 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+        color: #555;
+      }
+      .modal input[type="text"],
+      .modal select {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0 0 14px;
+        padding: 9px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        color: #111;
+        font:
+          14px/1.3 "PingFang SC",
+          "Hiragino Sans GB",
+          sans-serif;
+      }
+      .modal select:disabled,
+      .modal option:disabled {
+        color: #999;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .modal-actions .primary {
+        border-color: #111;
+        background: #111;
+        color: #fff;
+      }
+      .modal-actions .primary:hover {
+        border-color: #000;
+        background: #222;
+      }
+      @media (max-width: 860px) {
+        .brand {
+          display: none;
         }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <span class="brand">mm</span>
+      <div
+        class="mode-switch"
+        id="modeSwitch"
+        role="radiogroup"
+        aria-label="模式"
+      >
+        <button
+          type="button"
+          role="radio"
+          data-mode="view"
+          aria-checked="false"
+          tabindex="-1"
+        >
+          只读
+        </button>
+        <button
+          type="button"
+          role="radio"
+          data-mode="edit"
+          aria-checked="true"
+          tabindex="0"
+        >
+          编辑
+        </button>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="icon"
+        id="uploadBtn"
+        title="上传 Markdown"
+        aria-label="上传"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m17 8-5-5-5 5" />
+          <path d="M12 3v12" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="icon"
+        id="downloadBtn"
+        title="下载"
+        aria-label="下载"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M12 15V3" />
+        </svg>
+      </button>
+      <span class="sep" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="icon"
+        id="undoBtn"
+        title="撤销 ⌘Z"
+        aria-label="撤销"
+        disabled
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 14 4 9l5-5" />
+          <path d="M4 9h10a5 5 0 0 1 0 10h-1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="icon"
+        id="redoBtn"
+        title="重做 ⌘⇧Z"
+        aria-label="重做"
+        disabled
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m15 14 5-5-5-5" />
+          <path d="M20 9H10a5 5 0 0 0 0 10h1" />
+        </svg>
+      </button>
+      <input
+        id="fileInput"
+        type="file"
+        accept=".md,.markdown,text/markdown,text/plain"
+      />
+    </div>
+    <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
+    <div class="help" id="help">
+      <button
+        type="button"
+        class="icon"
+        id="helpBtn"
+        aria-label="帮助"
+        aria-describedby="helpTip"
+        aria-expanded="false"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </svg>
+      </button>
+      <div class="help-tip" id="helpTip" role="tooltip">
+        <ul>
+          <li>工具栏切换只读 / 编辑</li>
+          <li>双击编辑标题；双击或长按副标题</li>
+          <li>右键 / 长按打开菜单</li>
+          <li>菜单可添加副标题（标题 :: 副标题）</li>
+          <li>点击便签图标查看备注；双击或长按内容编辑</li>
+          <li>点击节点前 emoji 更换图标（含最近使用）</li>
+          <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
+          <li>Tab 加子节点</li>
+          <li>Enter 加同级</li>
+        </ul>
+      </div>
+    </div>
+    <div class="drop" id="dropHint">松开以导入 Markdown</div>
+    <div class="ctx-menu" id="ctxMenu" role="menu">
+      <button type="button" data-act="rename" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        <span>重命名</span>
+      </button>
+      <button type="button" data-act="subtitle" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 6h16" />
+          <path d="M4 12h10" />
+          <path d="M4 18h7" />
+        </svg>
+        <span>副标题</span>
+      </button>
+      <button type="button" data-act="note" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"
+          />
+          <path d="M15 3v6h6" />
+        </svg>
+        <span>备注</span>
+      </button>
+      <button type="button" data-act="child" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 3v8a2 2 0 0 0 2 2h8" />
+          <path d="M14 9h6v6" />
+          <path d="m20 9-7 7" />
+        </svg>
+        <span>子节点</span>
+      </button>
+      <button type="button" data-act="sibling" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </svg>
+        <span>同级</span>
+      </button>
+      <div class="sep"></div>
+      <button type="button" class="danger" data-act="delete" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 6h18" />
+          <path d="M8 6V4h8v2" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </svg>
+        <span>删除</span>
+      </button>
+    </div>
+    <div class="note-pop" id="notePop" role="dialog" aria-label="备注">
+      <div class="note-view" id="noteView"></div>
+      <textarea
+        class="note-edit"
+        id="noteEdit"
+        autocomplete="off"
+        spellcheck="true"
+        placeholder="输入备注…"
+      ></textarea>
+      <div class="note-foot" id="noteFoot" hidden>
+        <button type="button" id="noteCancel">取消</button>
+        <button type="button" class="primary" id="noteSave">保存</button>
+      </div>
+    </div>
+    <div class="icon-pop" id="iconPop" role="dialog" aria-label="选择图标">
+      <input
+        class="icon-search"
+        id="iconSearch"
+        type="search"
+        placeholder="搜索图标"
+        autocomplete="off"
+        spellcheck="false"
+        enterkeyhint="search"
+      />
+      <div class="icon-tabs" id="iconTabs" role="tablist"></div>
+      <div class="icon-grid" id="iconGrid" role="tabpanel"></div>
+      <div class="icon-foot">
+        <button type="button" id="iconClear">清除图标</button>
+        <button type="button" id="iconClose">关闭</button>
+      </div>
+    </div>
+    <div
+      class="modal-backdrop"
+      id="confirmModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmTitle"
+    >
+      <div class="modal">
+        <h2 id="confirmTitle">覆盖当前导图？</h2>
+        <p id="confirmText">导入将替换当前内容。可之后撤销。</p>
+        <div class="modal-actions">
+          <button type="button" id="confirmCancel">取消</button>
+          <button type="button" class="primary" id="confirmOk">覆盖导入</button>
+        </div>
+      </div>
+    </div>
+    <div
+      class="modal-backdrop"
+      id="downloadModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="downloadTitle"
+    >
+      <div class="modal">
+        <h2 id="downloadTitle">下载</h2>
+        <label for="downloadName">文件名</label>
+        <input
+          id="downloadName"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <label for="downloadFormat">格式</label>
+        <select id="downloadFormat"></select>
+        <div class="modal-actions">
+          <button type="button" id="downloadCancel">取消</button>
+          <button type="button" class="primary" id="downloadOk">下载</button>
+        </div>
+      </div>
+    </div>
+    <p class="toast" id="toast" role="status"></p>
+    <script type="module">
+      import {
+        DOWNLOAD_FORMATS,
+        EMOJI_CATEGORIES,
+        buildDownload,
+        captureState,
+        cloneData,
+        createHistory,
+        createLocalStore,
+        createRecentIconsStore,
+        searchEmojis,
+        nodeAtPath,
+        normalizeDownloadName,
+        pageTitleOf,
+        parseMarkdown,
+        pathToNode,
+        readAppMode,
+        recognizeNodeTap,
+        writeAppMode,
+        shouldConfirmOverwrite,
+        toMarkdown,
+      } from "./mm-core.js?v=20261102m";
+
+      const store = createLocalStore();
+      const history = createHistory();
+      const recentIcons = createRecentIconsStore();
+      const DEMO = {
+        title: "Markdown Mindmap",
+        subtitle: "mm.wenfu.dev",
+        icon: "🗺️",
+        open: true,
+        children: [
+          {
+            title: "上传大纲",
+            icon: "📤",
+            open: true,
+            children: [
+              { title: "# 标题 → 中心", children: [] },
+              { title: "拖放导入前会确认覆盖", children: [] },
+            ],
+          },
+          {
+            title: "编辑节点",
+            subtitle: "标题与副标题",
+            icon: "✏️",
+            open: true,
+            children: [
+              { title: "双击编辑标题", children: [] },
+              {
+                title: "双击或长按副标题",
+                subtitle: "直接编辑这一行",
+                note: "菜单也能添加副标题和备注；副标题导出为 标题 :: 副标题",
+                children: [],
+              },
+              { title: "工具栏切换只读 / 编辑", children: [] },
+              { title: "点击前导 emoji 换图标", icon: "🎨", children: [] },
+              { title: "Tab / Enter 快捷键", children: [] },
+            ],
+          },
+          { title: "下载可选文件名与格式", icon: "⬇️", children: [] },
+        ],
+      };
+
+      let tree = null;
+      let fileName = "mindmap.md";
+      let selected = null;
+      let editing = false;
+      let editField = "title";
+      let editInput = null;
+      let ignoreBlur = false;
+      let lastTap = { node: null, field: null, time: 0 };
+      let appMode = readAppMode();
+      let pendingImportFile = null;
+      let editBaseline = null;
+      let longPressTimer = null;
+      let longPressArmed = false;
+      let suppressNextTap = false;
+      let noteNode = null;
+      let noteEditing = false;
+      let noteBaseline = null;
+      let noteLongPressTimer = null;
+      let noteLastTap = { time: 0 };
+      let iconNode = null;
+      let iconTabId = "recent";
+      let iconQuery = "";
+
+      const NS = "http://www.w3.org/2000/svg";
+      const LONG_PRESS_MS = 520;
+      const svg = document.getElementById("map");
+      const viewport = document.createElementNS(NS, "g");
+      const toastEl = document.getElementById("toast");
+      const fileInput = document.getElementById("fileInput");
+      const ctxMenu = document.getElementById("ctxMenu");
+      const undoBtn = document.getElementById("undoBtn");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const modeSwitch = document.getElementById("modeSwitch");
+      const redoBtn = document.getElementById("redoBtn");
+      const confirmModal = document.getElementById("confirmModal");
+      const confirmTitle = document.getElementById("confirmTitle");
+      const confirmText = document.getElementById("confirmText");
+      const confirmOk = document.getElementById("confirmOk");
+      const downloadModal = document.getElementById("downloadModal");
+      const downloadName = document.getElementById("downloadName");
+      const downloadFormat = document.getElementById("downloadFormat");
+      const notePop = document.getElementById("notePop");
+      const noteView = document.getElementById("noteView");
+      const noteEdit = document.getElementById("noteEdit");
+      const noteFoot = document.getElementById("noteFoot");
+      const iconPop = document.getElementById("iconPop");
+      const iconTabs = document.getElementById("iconTabs");
+      const iconGrid = document.getElementById("iconGrid");
+      const iconSearch = document.getElementById("iconSearch");
+      svg.appendChild(viewport);
+
+      const GAP_X = 56;
+      const GAP_Y = 18;
+      const SUBTITLE_SIZE = 13;
+      const SUBTITLE_GAP = 4;
+      const NOTE_ICON_W = 22;
+      const NODE_ICON_W = 26;
+      const ICON_TABS = [
+        { id: "recent", label: "最近" },
+        ...EMOJI_CATEGORIES.map((c) => ({ id: c.id, label: c.label })),
+      ];
+      const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
+      const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
+      const styles = [
+        { size: 30, weight: 700, family: song, fill: "#111", h: 46 },
+        { size: 22, weight: 700, family: song, fill: "#111", h: 38 },
+        { size: 17, weight: 600, family: song, fill: "#111", h: 34 },
+        { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
+        { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
+      ];
+
+      function subtitleText(node) {
+        return node && node.subtitle ? String(node.subtitle).trim() : "";
+      }
+
+      function nodeShowsSubtitle(node) {
+        if (!node) return false;
+        if (subtitleText(node)) return true;
+        return editing && selected === node && editField === "subtitle";
+      }
+
+      function noteText(node) {
+        return node && node.note != null ? String(node.note) : "";
+      }
+
+      function nodeHasNote(node) {
+        return !!(node && String(node.note || "").trim());
+      }
+
+      function iconText(node) {
+        return node && node.icon ? String(node.icon).trim() : "";
+      }
+
+      DOWNLOAD_FORMATS.forEach((format) => {
+        const option = document.createElement("option");
+        option.value = format.id;
+        option.textContent = format.available
+          ? format.label
+          : `${format.label}（即将支持）`;
+        option.disabled = !format.available;
+        if (format.available) option.selected = true;
+        downloadFormat.appendChild(option);
       });
-    }
-    nodes.appendChild(group);
-  }
 
-  visit(tree);
-  apply();
-  updateChrome();
-}
+      function toast(message) {
+        toastEl.textContent = message;
+        toastEl.classList.add("show");
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+      }
 
-function apply() {
-  viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + scale + ")");
-}
+      function saveLocal() {
+        store.save(fileName, tree);
+      }
 
-function relayout(anchor) {
-  const before = anchor ? anchor.y : 0;
-  layout(tree);
-  place(tree, 0, 0);
-  if (anchor && anchor.y != null) ty += (before - anchor.y) * scale;
-  draw();
-}
+      function currentSnapshot() {
+        return captureState(tree, fileName, selected);
+      }
 
-let drag = null;
-function armDrag(event, node, mode) {
-  if (editing) return;
-  if (isSecondaryPointer(event)) return;
-  hideCtxMenu();
-  drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node, mode, pointerId: event.pointerId };
-  svg.setPointerCapture(event.pointerId);
-}
-svg.addEventListener("pointerdown", (event) => {
-  if (editing) return;
-  if (isSecondaryPointer(event)) return;
-  if (!event.target.closest || !event.target.closest("[data-node-path]")) hideCtxMenu();
-  armDrag(event, null, "pan");
-});
-svg.addEventListener("pointermove", (event) => {
-  if (!drag || editing) return;
-  const dx = event.clientX - drag.x;
-  const dy = event.clientY - drag.y;
-  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
-  drag.moved = true;
-  clearLongPress();
-  hideCtxMenu();
-  svg.classList.add("dragging");
-  tx = drag.tx + dx;
-  ty = drag.ty + dy;
-  apply();
-});
-function endDrag() {
-  clearLongPress();
-  if (suppressNextTap) {
-    suppressNextTap = false;
-    drag = null;
-    svg.classList.remove("dragging");
-    return;
-  }
-  if (drag && !drag.moved && drag.node) {
-    if (drag.mode === "toggle") {
-      lastTap = { node: null, time: 0 };
-      hideCtxMenu();
-      drag.node.open = !drag.node.open;
-      selected = drag.node;
-      relayout(drag.node);
-      saveLocal();
-    } else if (drag.mode === "select") {
-      const result = recognizeNodeTap(lastTap, drag.node, Date.now());
-      lastTap = result.next;
-      if (result.action === "edit") {
-        hideCtxMenu();
-        beginEdit(drag.node);
-      } else {
-        selected = drag.node;
+      function pushHistory() {
+        history.push(currentSnapshot());
+        updateHistoryChrome();
+      }
+
+      function canEdit() {
+        return appMode === "edit";
+      }
+
+      function syncModeSwitch() {
+        document.body.dataset.mode = appMode;
+        modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
+          const on = btn.getAttribute("data-mode") === appMode;
+          btn.setAttribute("aria-checked", on ? "true" : "false");
+          btn.tabIndex = on ? 0 : -1;
+        });
+        uploadBtn.disabled = !canEdit();
+        uploadBtn.title = canEdit() ? "上传 Markdown" : "只读模式下不能上传";
+        undoBtn.title = canEdit() ? "撤销 ⌘Z" : "只读模式下不能撤销";
+        redoBtn.title = canEdit() ? "重做 ⌘⇧Z" : "只读模式下不能重做";
+      }
+
+      function setAppMode(mode) {
+        const next = mode === "view" ? "view" : "edit";
+        if (next === appMode) return;
+        appMode = next;
+        writeAppMode(appMode);
+        if (!canEdit()) {
+          if (editing) commitEdit(true);
+          if (noteEditing) commitNote(true);
+          hideCtxMenu();
+          hideIconPop();
+          if (confirmModal.classList.contains("show")) closeConfirm(false);
+          document.body.classList.remove("dragging-file");
+        }
+        syncModeSwitch();
+        updateChrome();
+        if (!editing) draw();
+      }
+
+      function updateHistoryChrome() {
+        undoBtn.disabled = !canEdit() || !history.canUndo();
+        redoBtn.disabled = !canEdit() || !history.canRedo();
+      }
+
+      function restoreSnapshot(snapshot) {
+        if (!snapshot) return;
+        if (editing) {
+          editing = false;
+          editInput = null;
+          editBaseline = null;
+        }
+        tree = cloneData(snapshot.tree);
+        fileName = snapshot.fileName || fileName;
+        prepare(tree, true);
+        selected = snapshot.selectedPath
+          ? nodeAtPath(tree, snapshot.selectedPath)
+          : null;
+        document.title = pageTitleOf(tree) + " · mm";
+        svg.setAttribute("aria-label", pageTitleOf(tree));
+        frame();
+        saveLocal();
+        updateHistoryChrome();
+      }
+
+      function undo() {
+        if (!canEdit()) return;
+        if (editing) commitEdit(true);
+        if (!history.canUndo()) return;
+        const previous = history.undo(currentSnapshot());
+        restoreSnapshot(previous);
+        toast("已撤销");
+      }
+
+      function redo() {
+        if (!canEdit()) return;
+        if (editing) commitEdit(true);
+        if (!history.canRedo()) return;
+        const next = history.redo(currentSnapshot());
+        restoreSnapshot(next);
+        toast("已重做");
+      }
+
+      function walk(node, depth, visit) {
+        visit(node, depth);
+        node.children.forEach((child) => walk(child, depth + 1, visit));
+      }
+
+      function prepare(node, keepOpen) {
+        walk(node, 0, (item, depth) => {
+          item.depth = depth;
+          if (!keepOpen || item.open === undefined) item.open = depth < 2;
+        });
+      }
+
+      function refreshDepth(node, depth) {
+        node.depth = depth;
+        node.children.forEach((child) => refreshDepth(child, depth + 1));
+      }
+
+      function locate(target, node = tree, parent = null, index = -1) {
+        if (node === target) return { node, parent, index };
+        for (let i = 0; i < node.children.length; i++) {
+          const found = locate(target, node.children[i], node, i);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      function updateChrome() {
+        updateHistoryChrome();
+        updateCtxMenuChrome();
+      }
+
+      function updateCtxMenuChrome() {
+        const has = !!selected && !editing && canEdit();
+        const isRoot = selected === tree;
+        ctxMenu.querySelector('[data-act="rename"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="subtitle"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="note"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="child"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
+        ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
+      }
+
+      function selectNode(node) {
+        if (editing) commitEdit(true);
+        selected = node || null;
+        updateChrome();
         draw();
       }
-    }
-  } else if (drag && !drag.moved && !drag.node) {
-    lastTap = { node: null, time: 0 };
-    selected = null;
-    hideCtxMenu();
-    draw();
-  }
-  drag = null;
-  svg.classList.remove("dragging");
-}
-svg.addEventListener("pointerup", endDrag);
-svg.addEventListener("pointercancel", () => {
-  clearLongPress();
-  drag = null;
-  svg.classList.remove("dragging");
-});
-svg.addEventListener("contextmenu", (event) => {
-  event.preventDefault();
-  const node = nodeFromEventTarget(event.target);
-  if (!node) {
-    hideCtxMenu();
-    return;
-  }
-  showCtxMenu(event.clientX, event.clientY, node);
-});
-svg.addEventListener("wheel", (event) => {
-  if (editing) return;
-  event.preventDefault();
-  if (event.ctrlKey || event.metaKey) {
-    const next = Math.min(2.4, Math.max(0.35, scale * (event.deltaY < 0 ? 1.08 : 0.92)));
-    const rect = svg.getBoundingClientRect();
-    const px = event.clientX - rect.left;
-    const py = event.clientY - rect.top;
-    tx = px - ((px - tx) * next) / scale;
-    ty = py - ((py - ty) * next) / scale;
-    scale = next;
-  } else {
-    tx -= event.deltaX;
-    ty -= event.deltaY;
-  }
-  apply();
-}, { passive: false });
 
-function bounds() {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  (function scan(node) {
-    if (!node.style) return;
-    minX = Math.min(minX, node.x);
-    minY = Math.min(minY, node.y);
-    maxX = Math.max(maxX, node.x + node.w);
-    maxY = Math.max(maxY, node.y + node.h);
-    if (node.open) node.children.forEach(scan);
-  })(tree);
-  return { minX, minY, w: maxX - minX, h: maxY - minY };
-}
+      const measureCanvas = document.createElement("canvas").getContext("2d");
+      function textWidth(text, font) {
+        measureCanvas.font = font;
+        return Math.ceil(measureCanvas.measureText(text).width);
+      }
 
-function frame() {
-  layout(tree);
-  place(tree, 0, 0);
-  const box = bounds();
-  const pad = 40;
-  const fitW = (window.innerWidth - pad * 2) / Math.max(box.w, 1);
-  const fitH = (window.innerHeight - pad * 2) / Math.max(box.h, 1);
-  const fit = Math.min(fitW, fitH);
-  scale = Math.min(1, Number.isFinite(fit) ? (fit >= 0.78 ? fit : fitW) : 1);
-  if (!Number.isFinite(scale) || scale <= 0) scale = 1;
-  tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
-  const fittedH = box.h * scale;
-  ty = fittedH < window.innerHeight - pad
-    ? (window.innerHeight - fittedH) / 2 - box.minY * scale
-    : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
-  draw();
-}
+      function layout(node) {
+        const depth = Math.min(node.depth, styles.length - 1);
+        node.style = styles[depth];
+        const editingHere = editing && node === selected && editInput;
+        const title =
+          editingHere && editField === "title"
+            ? editInput.value || " "
+            : node.title || " ";
+        const subtitle =
+          editingHere && editField === "subtitle"
+            ? editInput.value || ""
+            : subtitleText(node);
+        const showSub = !!(
+          subtitle ||
+          (editingHere && editField === "subtitle")
+        );
+        node.labelW = textWidth(
+          title,
+          node.style.weight + " " + node.style.size + "px " + node.style.family,
+        );
+        if (showSub) {
+          const subW = textWidth(
+            subtitle || " ",
+            "400 " + SUBTITLE_SIZE + "px " + sans,
+          );
+          node.labelW = Math.max(node.labelW, subW);
+          node.h = node.style.h + SUBTITLE_SIZE + SUBTITLE_GAP;
+        } else {
+          node.h = node.style.h;
+        }
+        node.hasChildren = node.children.length > 0;
+        node.marker = node.hasChildren && !node.open ? node.children.length : 0;
+        node.markerW = node.hasChildren
+          ? 24 +
+            (node.marker
+              ? textWidth(String(node.marker), "400 13px " + sans) + 8
+              : 0)
+          : 0;
+        node.iconW = NODE_ICON_W;
+        node.noteW = nodeHasNote(node) ? NOTE_ICON_W : 0;
+        node.w = node.iconW + node.labelW + node.noteW + node.markerW;
+        if (!node.open || !node.hasChildren) {
+          node.subtreeH = node.h;
+          return;
+        }
+        node.children.forEach(layout);
+        const inner =
+          node.children.reduce((sum, child) => sum + child.subtreeH, 0) +
+          GAP_Y * (node.children.length - 1);
+        node.subtreeH = Math.max(node.h, inner);
+      }
 
-function beginEdit(node, field = "title") {
-  if (!node) return;
-  hideCtxMenu();
-  hideNotePop({ save: true });
-  hideIconPop();
-  const nextField = field === "subtitle" ? "subtitle" : "title";
-  if (editing && selected === node && editField === nextField) {
-    editInput && editInput.focus();
-    return;
-  }
-  if (editing) commitEdit(true);
-  selected = node;
-  editing = true;
-  editField = nextField;
-  editInput = null;
-  editBaseline = currentSnapshot();
-  layout(tree);
-  place(tree, 0, 0);
-  draw();
-}
+      function place(node, x, top) {
+        node.x = x;
+        if (!node.open || !node.hasChildren) {
+          node.y = top + (node.subtreeH - node.h) / 2;
+          return;
+        }
+        const inner =
+          node.children.reduce((sum, child) => sum + child.subtreeH, 0) +
+          GAP_Y * (node.children.length - 1);
+        let y = top + (node.subtreeH - inner) / 2;
+        node.children.forEach((child) => {
+          place(child, x + node.w + GAP_X, y);
+          y += child.subtreeH + GAP_Y;
+        });
+        const first = node.children[0];
+        const last = node.children[node.children.length - 1];
+        const mid = (first.y + first.h / 2 + last.y + last.h / 2) / 2;
+        node.y = mid - node.h / 2;
+      }
 
-function commitEdit(save) {
-  if (!editing) return;
-  const node = selected;
-  const field = editField;
-  const raw = editInput ? editInput.value.replace(/\s+/g, " ").trim() : "";
-  const baselineNode = editBaseline
-    ? (editBaseline.selectedPath && editBaseline.selectedPath.length
-      ? nodeAtPath(editBaseline.tree, editBaseline.selectedPath)
-      : editBaseline.tree)
-    : null;
-  let changed = false;
-  if (save && node && baselineNode) {
-    if (field === "subtitle") {
-      const prev = baselineNode.subtitle ? String(baselineNode.subtitle).trim() : "";
-      changed = raw !== prev;
-    } else {
-      const nextTitle = raw || "未命名";
-      changed = nextTitle !== baselineNode.title;
-    }
-  }
-  ignoreBlur = true;
-  editing = false;
-  editInput = null;
-  editField = "title";
-  if (save && node) {
-    if (changed && editBaseline) history.push(editBaseline);
-    if (field === "subtitle") {
-      if (raw) node.subtitle = raw;
-      else delete node.subtitle;
-    } else {
-      node.title = raw || "未命名";
-    }
-    if (node === tree) {
-      document.title = pageTitleOf(tree) + " · mm";
-      svg.setAttribute("aria-label", pageTitleOf(tree));
-    }
-  }
-  editBaseline = null;
-  relayout(node);
-  saveLocal();
-  updateHistoryChrome();
-  requestAnimationFrame(() => { ignoreBlur = false; });
-}
+      let tx = 48;
+      let ty = 36;
+      let scale = 1;
 
-function addChild(parent) {
-  if (!parent) return;
-  if (editing) commitEdit(true);
-  pushHistory();
-  const child = { title: "新节点", children: [], open: true, depth: (parent.depth || 0) + 1 };
-  parent.children.push(child);
-  parent.open = true;
-  refreshDepth(tree, 0);
-  selected = child;
-  editing = true;
-  editField = "title";
-  editInput = null;
-  editBaseline = currentSnapshot();
-  layout(tree);
-  place(tree, 0, 0);
-  draw();
-  saveLocal();
-}
+      function screenPoint(x, y) {
+        return { x: tx + x * scale, y: ty + y * scale };
+      }
 
-function addSibling(node) {
-  const info = locate(node);
-  if (!info || !info.parent) return;
-  if (editing) commitEdit(true);
-  pushHistory();
-  const sibling = { title: "新节点", children: [], open: true };
-  info.parent.children.splice(info.index + 1, 0, sibling);
-  refreshDepth(tree, 0);
-  selected = sibling;
-  editing = true;
-  editField = "title";
-  editInput = null;
-  editBaseline = currentSnapshot();
-  layout(tree);
-  place(tree, 0, 0);
-  draw();
-  saveLocal();
-}
+      function hideCtxMenu() {
+        ctxMenu.classList.remove("show");
+      }
 
-function deleteNode(node) {
-  const info = locate(node);
-  if (!info || !info.parent) {
-    toast("不能删除中心节点");
-    return;
-  }
-  if (editing) commitEdit(true);
-  hideCtxMenu();
-  pushHistory();
-  const parent = info.parent;
-  parent.children.splice(info.index, 1);
-  refreshDepth(tree, 0);
-  selected = parent;
-  relayout(parent);
-  saveLocal();
-}
+      function clearNoteLongPress() {
+        if (noteLongPressTimer) {
+          clearTimeout(noteLongPressTimer);
+          noteLongPressTimer = null;
+        }
+      }
 
-ctxMenu.addEventListener("pointerdown", (event) => {
-  event.stopPropagation();
-  ignoreBlur = true;
-});
-ctxMenu.addEventListener("click", (event) => {
-  const btn = event.target.closest("button[data-act]");
-  if (!btn || btn.disabled) return;
-  event.stopPropagation();
-  const act = btn.getAttribute("data-act");
-  hideCtxMenu();
-  if (act === "rename") beginEdit(selected, "title");
-  if (act === "subtitle") beginEdit(selected, "subtitle");
-  if (act === "note") openNote(selected, { edit: true });
-  if (act === "child") addChild(selected);
-  if (act === "sibling") addSibling(selected);
-  if (act === "delete") deleteNode(selected);
-  requestAnimationFrame(() => { ignoreBlur = false; });
-});
+      function positionNotePop(anchor) {
+        const pad = 8;
+        const width = notePop.offsetWidth || 280;
+        const height = notePop.offsetHeight || 160;
+        let left = anchor.left;
+        let top = anchor.bottom + 8;
+        if (left + width > window.innerWidth - pad)
+          left = window.innerWidth - width - pad;
+        if (top + height > window.innerHeight - pad)
+          top = Math.max(pad, anchor.top - height - 8);
+        if (left < pad) left = pad;
+        if (top < pad) top = pad;
+        notePop.style.left = `${left}px`;
+        notePop.style.top = `${top}px`;
+      }
 
-notePop.addEventListener("pointerdown", (event) => {
-  event.stopPropagation();
-});
-noteView.addEventListener("pointerdown", (event) => {
-  if (noteEditing || event.button !== 0) return;
-  clearNoteLongPress();
-  const startX = event.clientX;
-  const startY = event.clientY;
-  noteLongPressTimer = setTimeout(() => {
-    noteLongPressTimer = null;
-    beginNoteEdit();
-  }, LONG_PRESS_MS);
-  const onMove = (moveEvent) => {
-    if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) clearNoteLongPress();
-  };
-  const onUp = () => {
-    clearNoteLongPress();
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-  };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
-});
-noteView.addEventListener("click", (event) => {
-  if (noteEditing) return;
-  const now = Date.now();
-  if (now - noteLastTap.time <= 350) {
-    noteLastTap = { time: 0 };
-    beginNoteEdit();
-    return;
-  }
-  noteLastTap = { time: now };
-});
-document.getElementById("noteSave").addEventListener("click", () => commitNote(true));
-document.getElementById("noteCancel").addEventListener("click", () => {
-  const host = noteNode;
-  noteEditing = false;
-  noteBaseline = null;
-  syncNotePopContent();
-  if (!nodeHasNote(host)) {
-    hideNotePop({ save: false });
-    draw();
-  } else {
-    positionNotePop(noteAnchorRect());
-  }
-});
-noteEdit.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    document.getElementById("noteCancel").click();
-  } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-    event.preventDefault();
-    commitNote(true);
-  }
-});
+      function noteAnchorRect() {
+        if (!noteNode || !noteNode.style) {
+          return { left: window.innerWidth / 2 - 140, top: 80, bottom: 100 };
+        }
+        const x = noteNode.x + (noteNode.iconW || 0) + noteNode.labelW + 4;
+        const y = noteNode.y + noteNode.h / 2;
+        const pt = screenPoint(x, y);
+        return { left: pt.x, top: pt.y - 10, bottom: pt.y + 10 };
+      }
 
-undoBtn.addEventListener("click", undo);
-redoBtn.addEventListener("click", redo);
+      function syncNotePopContent() {
+        const text = noteText(noteNode);
+        noteView.textContent = text;
+        noteEdit.value = text;
+        notePop.classList.toggle("editing", noteEditing);
+        noteFoot.hidden = !noteEditing;
+      }
 
-window.addEventListener("keydown", (event) => {
-  if (iconPop.classList.contains("show") && event.key === "Escape") {
-    event.preventDefault();
-    hideIconPop();
-    draw();
-    return;
-  }
-  if (notePop.classList.contains("show") && event.key === "Escape") {
-    event.preventDefault();
-    if (noteEditing) document.getElementById("noteCancel").click();
-    else hideNotePop({ save: false });
-    return;
-  }
-  if (confirmModal.classList.contains("show") || downloadModal.classList.contains("show")) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeConfirm(false);
-      closeDownload();
-    }
-    return;
-  }
-  const mod = event.metaKey || event.ctrlKey;
-  if (mod && event.key.toLowerCase() === "z") {
-    event.preventDefault();
-    if (event.shiftKey) redo();
-    else undo();
-    return;
-  }
-  if (mod && event.key.toLowerCase() === "y") {
-    event.preventDefault();
-    redo();
-    return;
-  }
-  if (editing) return;
-  const tag = event.target && event.target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable) return;
-  if (!selected && event.key !== "Escape") return;
-  if (event.key === "Tab") {
-    event.preventDefault();
-    addChild(selected);
-  } else if (event.key === "Enter") {
-    event.preventDefault();
-    if (selected === tree) addChild(selected);
-    else addSibling(selected);
-  } else if (event.key === "F2") {
-    event.preventDefault();
-    beginEdit(selected);
-  } else if (event.key === "Backspace" || event.key === "Delete") {
-    event.preventDefault();
-    deleteNode(selected);
-  } else if (event.key === "Escape") {
-    hideCtxMenu();
-    selected = null;
-    draw();
-  }
-});
+      function openNote(node, options = {}) {
+        if (!node) return;
+        const edit = !!(options.edit && canEdit());
+        const clientX = options.clientX;
+        const clientY = options.clientY;
+        if (editing) commitEdit(true);
+        hideCtxMenu();
+        hideIconPop();
+        if (noteNode && noteNode !== node && noteEditing) commitNote(true);
+        selected = node;
+        noteNode = node;
+        noteEditing = !!edit;
+        noteBaseline = noteEditing ? currentSnapshot() : null;
+        noteLastTap = { time: 0 };
+        syncNotePopContent();
+        notePop.classList.add("show");
+        const anchor =
+          clientX != null
+            ? { left: clientX, top: clientY, bottom: clientY }
+            : noteAnchorRect();
+        positionNotePop(anchor);
+        updateChrome();
+        draw();
+        if (noteEditing) {
+          requestAnimationFrame(() => {
+            noteEdit.focus();
+            noteEdit.setSelectionRange(
+              noteEdit.value.length,
+              noteEdit.value.length,
+            );
+          });
+        }
+      }
 
-function loadTree(next, name, keepOpen, { recordHistory = false } = {}) {
-  if (editing) {
-    editing = false;
-    editInput = null;
-    editBaseline = null;
-  }
-  if (recordHistory) pushHistory();
-  tree = next;
-  selected = null;
-  if (name) fileName = name.replace(/\.markdown$/i, ".md");
-  prepare(tree, keepOpen);
-  const title = pageTitleOf(tree);
-  document.title = title + " · mm";
-  svg.setAttribute("aria-label", title);
-  frame();
-  saveLocal();
-  updateHistoryChrome();
-}
+      function beginNoteEdit() {
+        if (!canEdit() || !noteNode || noteEditing) return;
+        noteEditing = true;
+        noteBaseline = currentSnapshot();
+        syncNotePopContent();
+        positionNotePop(noteAnchorRect());
+        requestAnimationFrame(() => {
+          noteEdit.focus();
+          noteEdit.select();
+        });
+      }
 
-function openConfirm(file) {
-  pendingImportFile = file;
-  confirmTitle.textContent = "覆盖当前导图？";
-  confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图。可之后撤销。`;
-  confirmOk.textContent = "覆盖导入";
-  confirmModal.classList.add("show");
-}
+      function commitNote(save) {
+        if (!noteNode) {
+          hideNotePop();
+          return;
+        }
+        const node = noteNode;
+        const normalized = noteEdit.value
+          .replace(/\r\n/g, "\n")
+          .replace(/[ \t]+$/gm, "")
+          .replace(/^\n+|\n+$/g, "");
+        const prev = noteText(node);
+        const changed = save && normalized !== prev;
+        if (save && changed) {
+          if (noteBaseline) history.push(noteBaseline);
+          if (normalized) node.note = normalized;
+          else delete node.note;
+        }
+        noteEditing = false;
+        noteBaseline = null;
+        noteNode = null;
+        notePop.classList.remove("show", "editing");
+        noteFoot.hidden = true;
+        relayout(node);
+        saveLocal();
+        updateHistoryChrome();
+      }
 
-function closeConfirm(confirmed) {
-  confirmModal.classList.remove("show");
-  const file = pendingImportFile;
-  pendingImportFile = null;
-  if (confirmed && file) doImport(file);
-}
+      function hideNotePop({ save = true } = {}) {
+        if (!notePop.classList.contains("show")) return;
+        if (noteEditing && save) {
+          commitNote(true);
+          return;
+        }
+        noteEditing = false;
+        noteBaseline = null;
+        noteNode = null;
+        notePop.classList.remove("show", "editing");
+        noteFoot.hidden = true;
+      }
 
-async function doImport(file) {
-  try {
-    const text = await file.text();
-    loadTree(parseMarkdown(text), file.name || "outline.md", false, { recordHistory: true });
-    toast("已导入 " + (file.name || "Markdown"));
-  } catch (error) {
-    toast(error.message || String(error));
-  }
-}
+      function isSecondaryPointer(event) {
+        return event.button === 2 || (event.button === 0 && event.ctrlKey);
+      }
 
-async function requestImport(file) {
-  if (!file) return;
-  if (!/\.(md|markdown|txt)$/i.test(file.name || "") && file.type && !/^text\//.test(file.type)) {
-    toast("请选择 Markdown 文本文件");
-    return;
-  }
-  if (shouldConfirmOverwrite(tree)) openConfirm(file);
-  else doImport(file);
-}
+      function hideIconPop() {
+        iconPop.classList.remove("show");
+        iconNode = null;
+      }
 
-function openDownload() {
-  if (editing) commitEdit(true);
-  downloadName.value = (fileName || tree.title || "mindmap").replace(/\.(md|markdown|txt|html|xmind)$/i, "");
-  downloadFormat.value = "markdown";
-  downloadModal.classList.add("show");
-  downloadName.focus();
-  downloadName.select();
-}
+      function positionIconPop(anchor) {
+        const pad = 8;
+        const width = iconPop.offsetWidth || 360;
+        const height = iconPop.offsetHeight || 320;
+        let left = anchor.left;
+        let top = anchor.bottom + 8;
+        if (left + width > window.innerWidth - pad)
+          left = window.innerWidth - width - pad;
+        if (top + height > window.innerHeight - pad)
+          top = Math.max(pad, anchor.top - height - 8);
+        if (left < pad) left = pad;
+        if (top < pad) top = pad;
+        iconPop.style.left = `${left}px`;
+        iconPop.style.top = `${top}px`;
+      }
 
-function closeDownload() {
-  downloadModal.classList.remove("show");
-}
+      function emojisForTab(tabId) {
+        if (tabId === "recent") return recentIcons.load();
+        const cat = EMOJI_CATEGORIES.find((item) => item.id === tabId);
+        return cat ? cat.emojis : [];
+      }
 
-function confirmDownload() {
-  try {
-    const packed = buildDownload(tree, downloadFormat.value, downloadName.value);
-    const blob = new Blob([packed.content], { type: packed.mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = packed.filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    fileName = packed.filename;
-    saveLocal();
-    closeDownload();
-    toast("已下载 " + packed.filename);
-  } catch (error) {
-    toast(error.message || String(error));
-  }
-}
+      function renderIconTabs() {
+        iconTabs.replaceChildren();
+        ICON_TABS.forEach((tab) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.setAttribute("role", "tab");
+          btn.textContent = tab.label;
+          btn.className = tab.id === iconTabId ? "active" : "";
+          btn.setAttribute(
+            "aria-selected",
+            tab.id === iconTabId ? "true" : "false",
+          );
+          btn.addEventListener("click", () => {
+            iconTabId = tab.id;
+            iconQuery = "";
+            iconSearch.value = "";
+            renderIconTabs();
+            renderIconGrid();
+            btn.scrollIntoView({ inline: "nearest", block: "nearest" });
+          });
+          iconTabs.appendChild(btn);
+        });
+      }
 
-document.getElementById("uploadBtn").addEventListener("click", () => fileInput.click());
-document.getElementById("downloadBtn").addEventListener("click", openDownload);
-const help = document.getElementById("help");
-const helpBtn = document.getElementById("helpBtn");
-function setHelpOpen(open) {
-  help.classList.toggle("open", open);
-  helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
-}
-helpBtn.addEventListener("click", (event) => {
-  event.stopPropagation();
-  setHelpOpen(!help.classList.contains("open"));
-});
-window.addEventListener("pointerdown", (event) => {
-  if (!help.classList.contains("open")) return;
-  if (help.contains(event.target)) return;
-  setHelpOpen(false);
-});
-window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && help.classList.contains("open")) setHelpOpen(false);
-}, true);
-document.getElementById("confirmCancel").addEventListener("click", () => closeConfirm(false));
-document.getElementById("confirmOk").addEventListener("click", () => closeConfirm(true));
-document.getElementById("downloadCancel").addEventListener("click", closeDownload);
-document.getElementById("downloadOk").addEventListener("click", confirmDownload);
-downloadName.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    confirmDownload();
-  }
-});
-fileInput.addEventListener("change", () => {
-  const file = fileInput.files && fileInput.files[0];
-  fileInput.value = "";
-  requestImport(file);
-});
+      function renderIconGrid() {
+        const query = iconQuery.trim();
+        const emojis = query ? searchEmojis(query) : emojisForTab(iconTabId);
+        iconGrid.replaceChildren();
+        if (!emojis.length) {
+          const empty = document.createElement("p");
+          empty.className = "icon-empty";
+          empty.textContent = query
+            ? "没有匹配的图标"
+            : iconTabId === "recent"
+              ? "还没有最近使用，选一个会出现在这里"
+              : "暂无图标";
+          iconGrid.appendChild(empty);
+          return;
+        }
+        emojis.forEach((emoji) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = emoji;
+          btn.title = emoji;
+          btn.addEventListener("click", () => applyNodeIcon(emoji));
+          iconGrid.appendChild(btn);
+        });
+      }
 
-let dragDepth = 0;
-window.addEventListener("dragenter", (event) => {
-  event.preventDefault();
-  dragDepth += 1;
-  document.body.classList.add("dragging-file");
-});
-window.addEventListener("dragover", (event) => event.preventDefault());
-window.addEventListener("dragleave", (event) => {
-  event.preventDefault();
-  dragDepth = Math.max(0, dragDepth - 1);
-  if (!dragDepth) document.body.classList.remove("dragging-file");
-});
-window.addEventListener("drop", (event) => {
-  event.preventDefault();
-  dragDepth = 0;
-  document.body.classList.remove("dragging-file");
-  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
-  requestImport(file);
-});
+      function renderIconPicker() {
+        renderIconTabs();
+        renderIconGrid();
+      }
 
-confirmModal.addEventListener("click", (event) => {
-  if (event.target === confirmModal) closeConfirm(false);
-});
-downloadModal.addEventListener("click", (event) => {
-  if (event.target === downloadModal) closeDownload();
-});
+      function openIconPicker(node, event) {
+        if (!node || !canEdit()) return;
+        if (editing) commitEdit(true);
+        hideCtxMenu();
+        hideNotePop({ save: true });
+        selected = node;
+        iconNode = node;
+        iconTabId = "recent";
+        iconQuery = "";
+        iconSearch.value = "";
+        renderIconPicker();
+        iconPop.classList.add("show");
+        const anchor = event
+          ? { left: event.clientX, top: event.clientY, bottom: event.clientY }
+          : (() => {
+              const pt = screenPoint(node.x, node.y + node.h / 2);
+              return { left: pt.x, top: pt.y - 12, bottom: pt.y + 12 };
+            })();
+        positionIconPop(anchor);
+        updateChrome();
+        draw();
+      }
 
-const cached = store.load();
-if (cached) {
-  tree = cached.tree;
-  fileName = cached.fileName || "mindmap.md";
-  prepare(tree, true);
-  document.title = pageTitleOf(tree) + " · mm";
-  svg.setAttribute("aria-label", pageTitleOf(tree));
-} else {
-  tree = cloneData(DEMO);
-  prepare(tree, true);
-}
-frame();
-iconPop.addEventListener("pointerdown", (event) => event.stopPropagation());
-document.getElementById("iconClear").addEventListener("click", () => clearNodeIcon());
-document.getElementById("iconClose").addEventListener("click", () => {
-  hideIconPop();
-  draw();
-});
+      function applyNodeIcon(emoji) {
+        if (!iconNode || !canEdit()) return;
+        const node = iconNode;
+        const next = String(emoji || "").trim();
+        const prev = iconText(node);
+        if (next === prev) {
+          hideIconPop();
+          draw();
+          return;
+        }
+        pushHistory();
+        if (next) {
+          node.icon = next;
+          recentIcons.push(next);
+        } else {
+          delete node.icon;
+        }
+        hideIconPop();
+        relayout(node);
+        saveLocal();
+      }
 
-window.addEventListener("pointerdown", (event) => {
-  if (ctxMenu.classList.contains("show") && !ctxMenu.contains(event.target)) hideCtxMenu();
-  if (notePop.classList.contains("show") && !notePop.contains(event.target)) {
-    hideNotePop({ save: true });
-    draw();
-  }
-  if (iconPop.classList.contains("show") && !iconPop.contains(event.target)) {
-    hideIconPop();
-    draw();
-  }
-});
+      function clearNodeIcon() {
+        applyNodeIcon("");
+      }
 
-window.addEventListener("resize", () => {
-  hideCtxMenu();
-  if (notePop.classList.contains("show")) hideNotePop({ save: true });
-  if (iconPop.classList.contains("show")) hideIconPop();
-  if (!editing) frame();
-});
+      function showCtxMenu(clientX, clientY, node) {
+        if (!node || editing || !canEdit()) return;
+        clearLongPress();
+        hideNotePop({ save: true });
+        hideIconPop();
+        if (selected !== node) {
+          selected = node;
+          lastTap = { node: null, time: 0 };
+          draw();
+        } else {
+          updateChrome();
+        }
+        updateCtxMenuChrome();
+        ctxMenu.classList.add("show");
+        const pad = 8;
+        const width = ctxMenu.offsetWidth || 180;
+        const height = ctxMenu.offsetHeight || 180;
+        let left = clientX;
+        let top = clientY;
+        if (left + width > window.innerWidth - pad)
+          left = window.innerWidth - width - pad;
+        if (top + height > window.innerHeight - pad)
+          top = window.innerHeight - height - pad;
+        if (left < pad) left = pad;
+        if (top < pad) top = pad;
+        ctxMenu.style.left = `${left}px`;
+        ctxMenu.style.top = `${top}px`;
+      }
 
-window.__mm = {
-  recognizeNodeTap,
-  shouldConfirmOverwrite,
-  normalizeDownloadName,
-  buildDownload,
-  getTree: () => tree,
-  getSelected: () => selected,
-  isEditing: () => editing,
-  canUndo: () => history.canUndo(),
-  canRedo: () => history.canRedo(),
-  undo,
-  redo,
-  beginEdit: (node) => beginEdit(node || selected),
-  doubleTap: (node) => {
-    const target = node || selected || tree;
-    const first = recognizeNodeTap(null, target, Date.now());
-    lastTap = first.next;
-    selected = target;
-    draw();
-    const second = recognizeNodeTap(lastTap, target, Date.now());
-    lastTap = second.next;
-    if (second.action === "edit") beginEdit(target);
-    return second.action;
-  },
-};
-</script>
-</body>
+      function nodeFromEventTarget(target) {
+        const host =
+          target && target.closest && target.closest("[data-node-path]");
+        if (!host) return null;
+        const raw = host.getAttribute("data-node-path");
+        if (raw === "") return tree;
+        return nodeAtPath(tree, raw.split(",").map(Number));
+      }
+
+      function clearLongPress() {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        longPressArmed = false;
+      }
+
+      function armLongPress(event, node, kind) {
+        if (editing || !canEdit()) return;
+        if (kind !== "subtitle" && event.pointerType !== "touch") return;
+        clearLongPress();
+        longPressArmed = true;
+        const x = event.clientX;
+        const y = event.clientY;
+        const pointerId = event.pointerId;
+        longPressTimer = setTimeout(() => {
+          if (!longPressArmed || (drag && drag.moved)) return;
+          longPressArmed = false;
+          longPressTimer = null;
+          suppressNextTap = true;
+          drag = null;
+          svg.classList.remove("dragging");
+          try {
+            svg.releasePointerCapture(pointerId);
+          } catch (_) {}
+          if (!canEdit()) return;
+          if (kind === "subtitle") beginEdit(node, "subtitle");
+          else showCtxMenu(x, y, node);
+        }, LONG_PRESS_MS);
+      }
+
+      function bindSubtitleGesture(group, node, textX, contentTop) {
+        const sub = subtitleText(node);
+        if (!sub) return;
+        const subW = textWidth(sub, "400 " + SUBTITLE_SIZE + "px " + sans);
+        const hitY = contentTop + node.style.size;
+        const subHit = document.createElementNS(NS, "rect");
+        subHit.setAttribute("x", textX - 4);
+        subHit.setAttribute("y", hitY);
+        subHit.setAttribute("width", Math.max(subW, 12) + 8);
+        subHit.setAttribute(
+          "height",
+          Math.max(SUBTITLE_SIZE + 6, node.y + node.h - hitY),
+        );
+        subHit.setAttribute("fill", "transparent");
+        subHit.setAttribute("data-field", "subtitle");
+        subHit.addEventListener("pointerdown", (event) => {
+          event.stopPropagation();
+          if (isSecondaryPointer(event)) return;
+          armDrag(event, node, "subtitle");
+          armLongPress(event, node, "subtitle");
+        });
+        group.appendChild(subHit);
+      }
+
+      function draw() {
+        const activeValue = editing && editInput ? editInput.value : null;
+        const selectionStart =
+          editing && editInput ? editInput.selectionStart : null;
+        const selectionEnd =
+          editing && editInput ? editInput.selectionEnd : null;
+
+        viewport.replaceChildren();
+        const links = document.createElementNS(NS, "g");
+        const nodes = document.createElementNS(NS, "g");
+        viewport.append(links, nodes);
+
+        function visit(node) {
+          if (!node.style) return;
+          if (node.open) {
+            node.children.forEach((child) => {
+              if (!child.style) return;
+              const x1 = node.x + node.w;
+              const y1 = node.y + node.h / 2;
+              const x2 = child.x;
+              const y2 = child.y + child.h / 2;
+              const bend = Math.max(20, (x2 - x1) * 0.46);
+              const path = document.createElementNS(NS, "path");
+              path.setAttribute(
+                "d",
+                "M " +
+                  x1 +
+                  " " +
+                  y1 +
+                  " C " +
+                  (x1 + bend) +
+                  " " +
+                  y1 +
+                  ", " +
+                  (x2 - bend) +
+                  " " +
+                  y2 +
+                  ", " +
+                  x2 +
+                  " " +
+                  y2,
+              );
+              path.setAttribute("fill", "none");
+              path.setAttribute("stroke", "#111");
+              path.setAttribute("stroke-width", node.depth === 0 ? 1.6 : 1);
+              links.appendChild(path);
+              visit(child);
+            });
+          }
+
+          const group = document.createElementNS(NS, "g");
+          group.style.cursor = "pointer";
+          const nodePath = pathToNode(tree, node);
+          group.setAttribute(
+            "data-node-path",
+            nodePath ? nodePath.join(",") : "",
+          );
+          const isEditingNode = editing && node === selected;
+          const showSub = nodeShowsSubtitle(node);
+          const contentH = showSub
+            ? node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE
+            : node.style.size;
+          const contentTop = node.y + (node.h - contentH) / 2;
+          const titleY = contentTop + node.style.size / 2;
+          const subY =
+            contentTop + node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE / 2;
+          const textX = node.x + (node.iconW || 0);
+          const bodyW = (node.iconW || 0) + node.labelW;
+
+          if (node === selected || isEditingNode || iconNode === node) {
+            const sel = document.createElementNS(NS, "rect");
+            sel.setAttribute("x", node.x - 10);
+            sel.setAttribute("y", node.y + 2);
+            sel.setAttribute("width", Math.max(bodyW, 48) + 20);
+            sel.setAttribute("height", node.h - 4);
+            sel.setAttribute("rx", 4);
+            sel.setAttribute("fill", "#f0f0f0");
+            group.appendChild(sel);
+          }
+
+          {
+            const iconHit = document.createElementNS(NS, "rect");
+            iconHit.setAttribute("x", node.x - 2);
+            iconHit.setAttribute("y", node.y + 2);
+            iconHit.setAttribute("width", node.iconW || NODE_ICON_W);
+            iconHit.setAttribute("height", node.h - 4);
+            iconHit.setAttribute("fill", "transparent");
+            iconHit.style.cursor = "pointer";
+            iconHit.addEventListener("pointerdown", (event) => {
+              event.stopPropagation();
+              if (isSecondaryPointer(event)) return;
+              if (!canEdit()) {
+                armDrag(event, node, "select");
+                return;
+              }
+              event.preventDefault();
+              openIconPicker(node, event);
+            });
+            group.appendChild(iconHit);
+
+            const iconLabel = document.createElementNS(NS, "text");
+            iconLabel.setAttribute(
+              "x",
+              node.x + (node.iconW || NODE_ICON_W) / 2 - 1,
+            );
+            iconLabel.setAttribute("y", node.y + node.h / 2);
+            iconLabel.setAttribute("text-anchor", "middle");
+            iconLabel.setAttribute("dominant-baseline", "central");
+            iconLabel.setAttribute(
+              "font-size",
+              Math.max(14, Math.min(18, node.style.size - 2)),
+            );
+            iconLabel.style.pointerEvents = "none";
+            if (iconText(node)) {
+              iconLabel.textContent = iconText(node);
+            } else {
+              iconLabel.textContent = "○";
+              iconLabel.setAttribute("fill", "#bbb");
+              iconLabel.setAttribute("font-family", sans);
+              iconLabel.setAttribute("font-size", 12);
+            }
+            group.appendChild(iconLabel);
+          }
+
+          if (!isEditingNode) {
+            const hit = document.createElementNS(NS, "rect");
+            hit.setAttribute("x", textX - 4);
+            hit.setAttribute("y", node.y);
+            hit.setAttribute("width", Math.max(node.labelW, 12) + 8);
+            hit.setAttribute("height", node.h);
+            hit.setAttribute("fill", "transparent");
+            group.appendChild(hit);
+
+            const label = document.createElementNS(NS, "text");
+            label.setAttribute("x", textX);
+            label.setAttribute("y", titleY);
+            label.setAttribute("dominant-baseline", "central");
+            label.setAttribute("fill", node.style.fill);
+            label.setAttribute("font-family", node.style.family);
+            label.setAttribute("font-size", node.style.size);
+            label.setAttribute("font-weight", node.style.weight);
+            label.textContent = node.title;
+            group.appendChild(label);
+
+            if (showSub) {
+              const sub = document.createElementNS(NS, "text");
+              sub.setAttribute("x", textX);
+              sub.setAttribute("y", subY);
+              sub.setAttribute("dominant-baseline", "central");
+              sub.setAttribute("fill", "#888");
+              sub.setAttribute("font-family", sans);
+              sub.setAttribute("font-size", SUBTITLE_SIZE);
+              sub.setAttribute("font-weight", 400);
+              sub.style.pointerEvents = "none";
+              sub.textContent = subtitleText(node);
+              group.appendChild(sub);
+              bindSubtitleGesture(group, node, textX, contentTop);
+            }
+          } else {
+            const editW = Math.max(node.labelW + 28, 72);
+            const editingTitle = editField === "title";
+            const editingSub = editField === "subtitle";
+
+            if (editingTitle) {
+              const fo = document.createElementNS(NS, "foreignObject");
+              fo.setAttribute("x", textX - 6);
+              fo.setAttribute("y", contentTop - 2);
+              fo.setAttribute("width", editW);
+              fo.setAttribute("height", node.style.size + 8);
+              const input = document.createElement("input");
+              input.className = "inline-edit";
+              input.type = "text";
+              input.autocomplete = "off";
+              input.spellcheck = false;
+              input.value = activeValue != null ? activeValue : node.title;
+              input.style.fontFamily = node.style.family;
+              input.style.fontSize = node.style.size + "px";
+              input.style.fontWeight = node.style.weight;
+              fo.appendChild(input);
+              group.appendChild(fo);
+              editInput = input;
+            } else {
+              const label = document.createElementNS(NS, "text");
+              label.setAttribute("x", textX);
+              label.setAttribute("y", titleY);
+              label.setAttribute("dominant-baseline", "central");
+              label.setAttribute("fill", node.style.fill);
+              label.setAttribute("font-family", node.style.family);
+              label.setAttribute("font-size", node.style.size);
+              label.setAttribute("font-weight", node.style.weight);
+              label.textContent = node.title;
+              group.appendChild(label);
+            }
+
+            if (editingSub) {
+              const fo = document.createElementNS(NS, "foreignObject");
+              fo.setAttribute("x", textX - 6);
+              fo.setAttribute(
+                "y",
+                contentTop + node.style.size + SUBTITLE_GAP - 2,
+              );
+              fo.setAttribute("width", editW);
+              fo.setAttribute("height", SUBTITLE_SIZE + 8);
+              const input = document.createElement("input");
+              input.className = "inline-edit";
+              input.type = "text";
+              input.autocomplete = "off";
+              input.spellcheck = false;
+              input.placeholder = "副标题";
+              input.value =
+                activeValue != null ? activeValue : subtitleText(node);
+              input.style.fontFamily = sans;
+              input.style.fontSize = SUBTITLE_SIZE + "px";
+              input.style.fontWeight = 400;
+              fo.appendChild(input);
+              group.appendChild(fo);
+              editInput = input;
+            } else if (showSub) {
+              const sub = document.createElementNS(NS, "text");
+              sub.setAttribute("x", textX);
+              sub.setAttribute("y", subY);
+              sub.setAttribute("dominant-baseline", "central");
+              sub.setAttribute("fill", "#888");
+              sub.setAttribute("font-family", sans);
+              sub.setAttribute("font-size", SUBTITLE_SIZE);
+              sub.setAttribute("font-weight", 400);
+              sub.textContent = subtitleText(node);
+              group.appendChild(sub);
+            }
+
+            if (editInput) {
+              const input = editInput;
+              const fo = input.parentNode;
+              input.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitEdit(true);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  commitEdit(false);
+                } else if (event.key === "Tab" && editField === "title") {
+                  event.preventDefault();
+                  commitEdit(true);
+                  addChild(selected);
+                }
+              });
+              input.addEventListener("input", () => {
+                const value = input.value || " ";
+                if (editField === "title") {
+                  node.labelW = textWidth(
+                    value,
+                    node.style.weight +
+                      " " +
+                      node.style.size +
+                      "px " +
+                      node.style.family,
+                  );
+                  const subW = subtitleText(node)
+                    ? textWidth(
+                        subtitleText(node),
+                        "400 " + SUBTITLE_SIZE + "px " + sans,
+                      )
+                    : 0;
+                  node.labelW = Math.max(node.labelW, subW);
+                } else {
+                  const titleW = textWidth(
+                    node.title || " ",
+                    node.style.weight +
+                      " " +
+                      node.style.size +
+                      "px " +
+                      node.style.family,
+                  );
+                  const subW = textWidth(
+                    value,
+                    "400 " + SUBTITLE_SIZE + "px " + sans,
+                  );
+                  node.labelW = Math.max(titleW, subW);
+                }
+                fo.setAttribute("width", Math.max(node.labelW + 28, 72));
+              });
+              input.addEventListener("blur", () => {
+                if (ignoreBlur) return;
+                commitEdit(true);
+              });
+
+              requestAnimationFrame(() => {
+                if (!editInput) return;
+                editInput.focus();
+                if (selectionStart != null && selectionEnd != null) {
+                  try {
+                    editInput.setSelectionRange(selectionStart, selectionEnd);
+                  } catch (_) {
+                    editInput.select();
+                  }
+                } else {
+                  editInput.select();
+                }
+              });
+            }
+          }
+
+          if (node.noteW) {
+            const nx = node.x + (node.iconW || 0) + node.labelW + 11;
+            const ny = node.y + node.h / 2;
+            const noteIcon = document.createElementNS(NS, "g");
+            noteIcon.style.cursor = "pointer";
+            const noteHit = document.createElementNS(NS, "circle");
+            noteHit.setAttribute("cx", nx);
+            noteHit.setAttribute("cy", ny);
+            noteHit.setAttribute("r", 10);
+            noteHit.setAttribute("fill", "transparent");
+            noteIcon.appendChild(noteHit);
+            const paper = document.createElementNS(NS, "path");
+            paper.setAttribute(
+              "d",
+              `M ${nx - 5} ${ny - 6} h 7 l 3 3 v 9 h -10 z M ${nx + 2} ${ny - 6} v 3 h 3`,
+            );
+            paper.setAttribute(
+              "fill",
+              noteNode === node && notePop.classList.contains("show")
+                ? "#eee"
+                : "#fff",
+            );
+            paper.setAttribute("stroke", "#666");
+            paper.setAttribute("stroke-width", 1.2);
+            paper.setAttribute("stroke-linejoin", "round");
+            noteIcon.appendChild(paper);
+            noteIcon.addEventListener("pointerdown", (event) => {
+              event.stopPropagation();
+              if (isSecondaryPointer(event)) return;
+              event.preventDefault();
+              openNote(node, {
+                edit: false,
+                clientX: event.clientX,
+                clientY: event.clientY,
+              });
+            });
+            group.appendChild(noteIcon);
+          }
+
+          if (node.hasChildren) {
+            const baseRight =
+              (node.iconW || 0) +
+              (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) +
+              (node.noteW || 0);
+            const mx = node.x + baseRight + 16;
+            const my = node.y + node.h / 2;
+            const mark = document.createElementNS(NS, "circle");
+            mark.setAttribute("cx", mx);
+            mark.setAttribute("cy", my);
+            mark.setAttribute("r", 7);
+            mark.setAttribute("fill", "#fff");
+            mark.setAttribute("stroke", "#111");
+            mark.setAttribute("stroke-width", 1.2);
+            group.appendChild(mark);
+            const hline = document.createElementNS(NS, "path");
+            hline.setAttribute(
+              "d",
+              "M " + (mx - 3.2) + " " + my + " H " + (mx + 3.2),
+            );
+            hline.setAttribute("stroke", "#111");
+            hline.setAttribute("stroke-width", 1.2);
+            hline.setAttribute("fill", "none");
+            group.appendChild(hline);
+            if (!node.open) {
+              const vline = document.createElementNS(NS, "path");
+              vline.setAttribute(
+                "d",
+                "M " + mx + " " + (my - 3.2) + " V " + (my + 3.2),
+              );
+              vline.setAttribute("stroke", "#111");
+              vline.setAttribute("stroke-width", 1.2);
+              vline.setAttribute("fill", "none");
+              group.appendChild(vline);
+            }
+            if (node.marker) {
+              const count = document.createElementNS(NS, "text");
+              count.setAttribute("x", mx + 14);
+              count.setAttribute("y", my);
+              count.setAttribute("dominant-baseline", "central");
+              count.setAttribute("fill", "#888");
+              count.setAttribute("font-family", sans);
+              count.setAttribute("font-size", 13);
+              count.setAttribute("font-weight", 400);
+              count.textContent = String(node.marker);
+              group.appendChild(count);
+            }
+            if (!isEditingNode) {
+              const markHit = document.createElementNS(NS, "circle");
+              markHit.setAttribute("cx", mx);
+              markHit.setAttribute("cy", my);
+              markHit.setAttribute("r", 12);
+              markHit.setAttribute("fill", "transparent");
+              markHit.style.cursor = "pointer";
+              markHit.addEventListener("pointerdown", (event) => {
+                event.stopPropagation();
+                if (isSecondaryPointer(event)) return;
+                armDrag(event, node, "toggle");
+              });
+              group.appendChild(markHit);
+            }
+          }
+
+          if (!isEditingNode) {
+            group.addEventListener("pointerdown", (event) => {
+              event.stopPropagation();
+              if (isSecondaryPointer(event)) return;
+              armDrag(event, node, "select");
+              armLongPress(event, node, "menu");
+            });
+          }
+          nodes.appendChild(group);
+        }
+
+        visit(tree);
+        apply();
+        updateChrome();
+      }
+
+      function apply() {
+        viewport.setAttribute(
+          "transform",
+          "translate(" + tx + " " + ty + ") scale(" + scale + ")",
+        );
+      }
+
+      function relayout(anchor) {
+        const before = anchor ? anchor.y : 0;
+        layout(tree);
+        place(tree, 0, 0);
+        if (anchor && anchor.y != null) ty += (before - anchor.y) * scale;
+        draw();
+      }
+
+      let drag = null;
+      function armDrag(event, node, mode) {
+        if (editing) return;
+        if (isSecondaryPointer(event)) return;
+        hideCtxMenu();
+        drag = {
+          x: event.clientX,
+          y: event.clientY,
+          tx,
+          ty,
+          moved: false,
+          node,
+          mode,
+          pointerId: event.pointerId,
+        };
+        try {
+          svg.setPointerCapture(event.pointerId);
+        } catch (_) {}
+      }
+      svg.addEventListener("pointerdown", (event) => {
+        if (editing) return;
+        if (isSecondaryPointer(event)) return;
+        if (!event.target.closest || !event.target.closest("[data-node-path]"))
+          hideCtxMenu();
+        armDrag(event, null, "pan");
+      });
+      svg.addEventListener("pointermove", (event) => {
+        if (!drag || editing) return;
+        const dx = event.clientX - drag.x;
+        const dy = event.clientY - drag.y;
+        if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+        drag.moved = true;
+        clearLongPress();
+        hideCtxMenu();
+        svg.classList.add("dragging");
+        tx = drag.tx + dx;
+        ty = drag.ty + dy;
+        apply();
+      });
+      function endDrag() {
+        clearLongPress();
+        if (suppressNextTap) {
+          suppressNextTap = false;
+          drag = null;
+          svg.classList.remove("dragging");
+          return;
+        }
+        if (drag && !drag.moved && drag.node) {
+          if (drag.mode === "toggle") {
+            lastTap = { node: null, time: 0 };
+            hideCtxMenu();
+            drag.node.open = !drag.node.open;
+            selected = drag.node;
+            relayout(drag.node);
+            saveLocal();
+          } else if (drag.mode === "select" || drag.mode === "subtitle") {
+            const field = drag.mode === "subtitle" ? "subtitle" : "title";
+            if (!canEdit()) {
+              lastTap = { node: null, field: null, time: 0 };
+              hideCtxMenu();
+              selected = drag.node;
+              draw();
+            } else {
+              const result = recognizeNodeTap(
+                lastTap,
+                drag.node,
+                Date.now(),
+                undefined,
+                field,
+              );
+              lastTap = result.next;
+              if (result.action === "edit") {
+                hideCtxMenu();
+                beginEdit(drag.node, field);
+              } else {
+                selected = drag.node;
+                draw();
+              }
+            }
+          }
+        } else if (drag && !drag.moved && !drag.node) {
+          lastTap = { node: null, time: 0 };
+          selected = null;
+          hideCtxMenu();
+          draw();
+        }
+        drag = null;
+        svg.classList.remove("dragging");
+      }
+      svg.addEventListener("pointerup", endDrag);
+      svg.addEventListener("pointercancel", () => {
+        clearLongPress();
+        drag = null;
+        svg.classList.remove("dragging");
+      });
+      svg.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        const node = nodeFromEventTarget(event.target);
+        if (!node || !canEdit()) {
+          hideCtxMenu();
+          if (node) {
+            selected = node;
+            draw();
+          }
+          return;
+        }
+        showCtxMenu(event.clientX, event.clientY, node);
+      });
+      svg.addEventListener(
+        "wheel",
+        (event) => {
+          if (editing) return;
+          event.preventDefault();
+          if (event.ctrlKey || event.metaKey) {
+            const next = Math.min(
+              2.4,
+              Math.max(0.35, scale * (event.deltaY < 0 ? 1.08 : 0.92)),
+            );
+            const rect = svg.getBoundingClientRect();
+            const px = event.clientX - rect.left;
+            const py = event.clientY - rect.top;
+            tx = px - ((px - tx) * next) / scale;
+            ty = py - ((py - ty) * next) / scale;
+            scale = next;
+          } else {
+            tx -= event.deltaX;
+            ty -= event.deltaY;
+          }
+          apply();
+        },
+        { passive: false },
+      );
+
+      function bounds() {
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        (function scan(node) {
+          if (!node.style) return;
+          minX = Math.min(minX, node.x);
+          minY = Math.min(minY, node.y);
+          maxX = Math.max(maxX, node.x + node.w);
+          maxY = Math.max(maxY, node.y + node.h);
+          if (node.open) node.children.forEach(scan);
+        })(tree);
+        return { minX, minY, w: maxX - minX, h: maxY - minY };
+      }
+
+      function frame() {
+        layout(tree);
+        place(tree, 0, 0);
+        const box = bounds();
+        const pad = 40;
+        const fitW = (window.innerWidth - pad * 2) / Math.max(box.w, 1);
+        const fitH = (window.innerHeight - pad * 2) / Math.max(box.h, 1);
+        const fit = Math.min(fitW, fitH);
+        scale = Math.min(
+          1,
+          Number.isFinite(fit) ? (fit >= 0.78 ? fit : fitW) : 1,
+        );
+        if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+        tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
+        const fittedH = box.h * scale;
+        ty =
+          fittedH < window.innerHeight - pad
+            ? (window.innerHeight - fittedH) / 2 - box.minY * scale
+            : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
+        draw();
+      }
+
+      function beginEdit(node, field = "title") {
+        if (!node || !canEdit()) return;
+        hideCtxMenu();
+        hideNotePop({ save: true });
+        hideIconPop();
+        const nextField = field === "subtitle" ? "subtitle" : "title";
+        if (editing && selected === node && editField === nextField) {
+          editInput && editInput.focus();
+          return;
+        }
+        if (editing) commitEdit(true);
+        selected = node;
+        editing = true;
+        editField = nextField;
+        editInput = null;
+        editBaseline = currentSnapshot();
+        layout(tree);
+        place(tree, 0, 0);
+        draw();
+      }
+
+      function commitEdit(save) {
+        if (!editing) return;
+        const node = selected;
+        const field = editField;
+        const raw = editInput
+          ? editInput.value.replace(/\s+/g, " ").trim()
+          : "";
+        const baselineNode = editBaseline
+          ? editBaseline.selectedPath && editBaseline.selectedPath.length
+            ? nodeAtPath(editBaseline.tree, editBaseline.selectedPath)
+            : editBaseline.tree
+          : null;
+        let changed = false;
+        if (save && node && baselineNode) {
+          if (field === "subtitle") {
+            const prev = baselineNode.subtitle
+              ? String(baselineNode.subtitle).trim()
+              : "";
+            changed = raw !== prev;
+          } else {
+            const nextTitle = raw || "未命名";
+            changed = nextTitle !== baselineNode.title;
+          }
+        }
+        ignoreBlur = true;
+        editing = false;
+        editInput = null;
+        editField = "title";
+        if (save && node) {
+          if (changed && editBaseline) history.push(editBaseline);
+          if (field === "subtitle") {
+            if (raw) node.subtitle = raw;
+            else delete node.subtitle;
+          } else {
+            node.title = raw || "未命名";
+          }
+          if (node === tree) {
+            document.title = pageTitleOf(tree) + " · mm";
+            svg.setAttribute("aria-label", pageTitleOf(tree));
+          }
+        }
+        editBaseline = null;
+        relayout(node);
+        saveLocal();
+        updateHistoryChrome();
+        requestAnimationFrame(() => {
+          ignoreBlur = false;
+        });
+      }
+
+      function addChild(parent) {
+        if (!parent || !canEdit()) return;
+        if (editing) commitEdit(true);
+        pushHistory();
+        const child = {
+          title: "新节点",
+          children: [],
+          open: true,
+          depth: (parent.depth || 0) + 1,
+        };
+        parent.children.push(child);
+        parent.open = true;
+        refreshDepth(tree, 0);
+        selected = child;
+        editing = true;
+        editField = "title";
+        editInput = null;
+        editBaseline = currentSnapshot();
+        layout(tree);
+        place(tree, 0, 0);
+        draw();
+        saveLocal();
+      }
+
+      function addSibling(node) {
+        const info = locate(node);
+        if (!info || !info.parent || !canEdit()) return;
+        if (editing) commitEdit(true);
+        pushHistory();
+        const sibling = { title: "新节点", children: [], open: true };
+        info.parent.children.splice(info.index + 1, 0, sibling);
+        refreshDepth(tree, 0);
+        selected = sibling;
+        editing = true;
+        editField = "title";
+        editInput = null;
+        editBaseline = currentSnapshot();
+        layout(tree);
+        place(tree, 0, 0);
+        draw();
+        saveLocal();
+      }
+
+      function deleteNode(node) {
+        if (!canEdit()) return;
+        const info = locate(node);
+        if (!info || !info.parent) {
+          toast("不能删除中心节点");
+          return;
+        }
+        if (editing) commitEdit(true);
+        hideCtxMenu();
+        pushHistory();
+        const parent = info.parent;
+        parent.children.splice(info.index, 1);
+        refreshDepth(tree, 0);
+        selected = parent;
+        relayout(parent);
+        saveLocal();
+      }
+
+      ctxMenu.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        ignoreBlur = true;
+      });
+      ctxMenu.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-act]");
+        if (!btn || btn.disabled) return;
+        event.stopPropagation();
+        const act = btn.getAttribute("data-act");
+        hideCtxMenu();
+        if (act === "rename") beginEdit(selected, "title");
+        if (act === "subtitle") beginEdit(selected, "subtitle");
+        if (act === "note") openNote(selected, { edit: true });
+        if (act === "child") addChild(selected);
+        if (act === "sibling") addSibling(selected);
+        if (act === "delete") deleteNode(selected);
+        requestAnimationFrame(() => {
+          ignoreBlur = false;
+        });
+      });
+
+      notePop.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      noteView.addEventListener("pointerdown", (event) => {
+        if (noteEditing || event.button !== 0) return;
+        clearNoteLongPress();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        noteLongPressTimer = setTimeout(() => {
+          noteLongPressTimer = null;
+          beginNoteEdit();
+        }, LONG_PRESS_MS);
+        const onMove = (moveEvent) => {
+          if (
+            Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) >
+            8
+          )
+            clearNoteLongPress();
+        };
+        const onUp = () => {
+          clearNoteLongPress();
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      });
+      noteView.addEventListener("click", (event) => {
+        if (noteEditing) return;
+        const now = Date.now();
+        if (now - noteLastTap.time <= 350) {
+          noteLastTap = { time: 0 };
+          beginNoteEdit();
+          return;
+        }
+        noteLastTap = { time: now };
+      });
+      document
+        .getElementById("noteSave")
+        .addEventListener("click", () => commitNote(true));
+      document.getElementById("noteCancel").addEventListener("click", () => {
+        const host = noteNode;
+        noteEditing = false;
+        noteBaseline = null;
+        syncNotePopContent();
+        if (!nodeHasNote(host)) {
+          hideNotePop({ save: false });
+          draw();
+        } else {
+          positionNotePop(noteAnchorRect());
+        }
+      });
+      noteEdit.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          document.getElementById("noteCancel").click();
+        } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          commitNote(true);
+        }
+      });
+
+      undoBtn.addEventListener("click", undo);
+      redoBtn.addEventListener("click", redo);
+
+      window.addEventListener("keydown", (event) => {
+        if (iconPop.classList.contains("show") && event.key === "Escape") {
+          event.preventDefault();
+          hideIconPop();
+          draw();
+          return;
+        }
+        if (notePop.classList.contains("show") && event.key === "Escape") {
+          event.preventDefault();
+          if (noteEditing) document.getElementById("noteCancel").click();
+          else hideNotePop({ save: false });
+          return;
+        }
+        if (
+          confirmModal.classList.contains("show") ||
+          downloadModal.classList.contains("show")
+        ) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeConfirm(false);
+            closeDownload();
+          }
+          return;
+        }
+        const mod = event.metaKey || event.ctrlKey;
+        if (mod && event.key.toLowerCase() === "z") {
+          if (!canEdit()) return;
+          event.preventDefault();
+          if (event.shiftKey) redo();
+          else undo();
+          return;
+        }
+        if (mod && event.key.toLowerCase() === "y") {
+          if (!canEdit()) return;
+          event.preventDefault();
+          redo();
+          return;
+        }
+        if (editing) return;
+        const tag = event.target && event.target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          event.target.isContentEditable
+        )
+          return;
+        if (modeSwitch.contains(event.target)) return;
+        if (!selected && event.key !== "Escape") return;
+        if (!canEdit()) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            hideCtxMenu();
+            selected = null;
+            draw();
+          }
+          return;
+        }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          addChild(selected);
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          if (selected === tree) addChild(selected);
+          else addSibling(selected);
+        } else if (event.key === "F2") {
+          event.preventDefault();
+          beginEdit(selected);
+        } else if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          deleteNode(selected);
+        } else if (event.key === "Escape") {
+          hideCtxMenu();
+          selected = null;
+          draw();
+        }
+      });
+
+      function loadTree(next, name, keepOpen, { recordHistory = false } = {}) {
+        if (editing) {
+          editing = false;
+          editInput = null;
+          editBaseline = null;
+        }
+        if (recordHistory) pushHistory();
+        tree = next;
+        selected = null;
+        if (name) fileName = name.replace(/\.markdown$/i, ".md");
+        prepare(tree, keepOpen);
+        const title = pageTitleOf(tree);
+        document.title = title + " · mm";
+        svg.setAttribute("aria-label", title);
+        frame();
+        saveLocal();
+        updateHistoryChrome();
+      }
+
+      function openConfirm(file) {
+        pendingImportFile = file;
+        confirmTitle.textContent = "覆盖当前导图？";
+        confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图。可之后撤销。`;
+        confirmOk.textContent = "覆盖导入";
+        confirmModal.classList.add("show");
+      }
+
+      function closeConfirm(confirmed) {
+        confirmModal.classList.remove("show");
+        const file = pendingImportFile;
+        pendingImportFile = null;
+        if (confirmed && file) doImport(file);
+      }
+
+      async function doImport(file) {
+        try {
+          const text = await file.text();
+          loadTree(parseMarkdown(text), file.name || "outline.md", false, {
+            recordHistory: true,
+          });
+          toast("已导入 " + (file.name || "Markdown"));
+        } catch (error) {
+          toast(error.message || String(error));
+        }
+      }
+
+      async function requestImport(file) {
+        if (!file) return;
+        if (!canEdit()) {
+          toast("只读模式下不能导入");
+          return;
+        }
+        if (
+          !/\.(md|markdown|txt)$/i.test(file.name || "") &&
+          file.type &&
+          !/^text\//.test(file.type)
+        ) {
+          toast("请选择 Markdown 文本文件");
+          return;
+        }
+        if (shouldConfirmOverwrite(tree)) openConfirm(file);
+        else doImport(file);
+      }
+
+      function openDownload() {
+        if (editing) commitEdit(true);
+        downloadName.value = (fileName || tree.title || "mindmap").replace(
+          /\.(md|markdown|txt|html|xmind)$/i,
+          "",
+        );
+        downloadFormat.value = "markdown";
+        downloadModal.classList.add("show");
+        downloadName.focus();
+        downloadName.select();
+      }
+
+      function closeDownload() {
+        downloadModal.classList.remove("show");
+      }
+
+      function confirmDownload() {
+        try {
+          const packed = buildDownload(
+            tree,
+            downloadFormat.value,
+            downloadName.value,
+          );
+          const blob = new Blob([packed.content], { type: packed.mime });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = packed.filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          fileName = packed.filename;
+          saveLocal();
+          closeDownload();
+          toast("已下载 " + packed.filename);
+        } catch (error) {
+          toast(error.message || String(error));
+        }
+      }
+
+      uploadBtn.addEventListener("click", () => fileInput.click());
+      modeSwitch.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-mode]");
+        if (!btn) return;
+        setAppMode(btn.getAttribute("data-mode"));
+      });
+      modeSwitch.addEventListener("keydown", (event) => {
+        if (
+          event.key !== "ArrowLeft" &&
+          event.key !== "ArrowRight" &&
+          event.key !== "Home" &&
+          event.key !== "End"
+        )
+          return;
+        event.preventDefault();
+        const next =
+          event.key === "ArrowLeft" || event.key === "Home" ? "view" : "edit";
+        setAppMode(next);
+        const current = modeSwitch.querySelector(`[data-mode="${appMode}"]`);
+        if (current) current.focus();
+      });
+      document
+        .getElementById("downloadBtn")
+        .addEventListener("click", openDownload);
+      const help = document.getElementById("help");
+      const helpBtn = document.getElementById("helpBtn");
+      function setHelpOpen(open) {
+        help.classList.toggle("open", open);
+        helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      helpBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setHelpOpen(!help.classList.contains("open"));
+      });
+      window.addEventListener("pointerdown", (event) => {
+        if (!help.classList.contains("open")) return;
+        if (help.contains(event.target)) return;
+        setHelpOpen(false);
+      });
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key === "Escape" && help.classList.contains("open"))
+            setHelpOpen(false);
+        },
+        true,
+      );
+      document
+        .getElementById("confirmCancel")
+        .addEventListener("click", () => closeConfirm(false));
+      document
+        .getElementById("confirmOk")
+        .addEventListener("click", () => closeConfirm(true));
+      document
+        .getElementById("downloadCancel")
+        .addEventListener("click", closeDownload);
+      document
+        .getElementById("downloadOk")
+        .addEventListener("click", confirmDownload);
+      downloadName.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          confirmDownload();
+        }
+      });
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        fileInput.value = "";
+        requestImport(file);
+      });
+
+      let dragDepth = 0;
+      window.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        if (!canEdit()) return;
+        dragDepth += 1;
+        document.body.classList.add("dragging-file");
+      });
+      window.addEventListener("dragover", (event) => event.preventDefault());
+      window.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (!dragDepth) document.body.classList.remove("dragging-file");
+      });
+      window.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dragDepth = 0;
+        document.body.classList.remove("dragging-file");
+        const file =
+          event.dataTransfer &&
+          event.dataTransfer.files &&
+          event.dataTransfer.files[0];
+        requestImport(file);
+      });
+
+      confirmModal.addEventListener("click", (event) => {
+        if (event.target === confirmModal) closeConfirm(false);
+      });
+      downloadModal.addEventListener("click", (event) => {
+        if (event.target === downloadModal) closeDownload();
+      });
+
+      const cached = store.load();
+      if (cached) {
+        tree = cached.tree;
+        fileName = cached.fileName || "mindmap.md";
+        prepare(tree, true);
+        document.title = pageTitleOf(tree) + " · mm";
+        svg.setAttribute("aria-label", pageTitleOf(tree));
+      } else {
+        tree = cloneData(DEMO);
+        prepare(tree, true);
+      }
+      syncModeSwitch();
+      frame();
+      iconPop.addEventListener("pointerdown", (event) =>
+        event.stopPropagation(),
+      );
+      iconSearch.addEventListener("input", () => {
+        iconQuery = iconSearch.value;
+        renderIconGrid();
+      });
+      iconSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (iconQuery.trim()) {
+            iconQuery = "";
+            iconSearch.value = "";
+            renderIconGrid();
+            return;
+          }
+          hideIconPop();
+          draw();
+        }
+      });
+      document
+        .getElementById("iconClear")
+        .addEventListener("click", () => clearNodeIcon());
+      document.getElementById("iconClose").addEventListener("click", () => {
+        hideIconPop();
+        draw();
+      });
+
+      window.addEventListener("pointerdown", (event) => {
+        if (
+          ctxMenu.classList.contains("show") &&
+          !ctxMenu.contains(event.target)
+        )
+          hideCtxMenu();
+        if (
+          notePop.classList.contains("show") &&
+          !notePop.contains(event.target)
+        ) {
+          hideNotePop({ save: true });
+          draw();
+        }
+        if (
+          iconPop.classList.contains("show") &&
+          !iconPop.contains(event.target)
+        ) {
+          hideIconPop();
+          draw();
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        hideCtxMenu();
+        if (notePop.classList.contains("show")) hideNotePop({ save: true });
+        if (iconPop.classList.contains("show")) hideIconPop();
+        if (!editing) frame();
+      });
+
+      window.__mm = {
+        recognizeNodeTap,
+        shouldConfirmOverwrite,
+        normalizeDownloadName,
+        buildDownload,
+        getTree: () => tree,
+        getSelected: () => selected,
+        isEditing: () => editing,
+        canUndo: () => history.canUndo(),
+        canRedo: () => history.canRedo(),
+        canEdit,
+        getMode: () => appMode,
+        setMode: (mode) => setAppMode(mode),
+        undo,
+        redo,
+        beginEdit: (node, field) => beginEdit(node || selected, field),
+        doubleTap: (node, field = "title") => {
+          if (!canEdit()) return "select";
+          const target = node || selected || tree;
+          const targetField = field === "subtitle" ? "subtitle" : "title";
+          const first = recognizeNodeTap(
+            null,
+            target,
+            Date.now(),
+            undefined,
+            targetField,
+          );
+          lastTap = first.next;
+          selected = target;
+          draw();
+          const second = recognizeNodeTap(
+            lastTap,
+            target,
+            Date.now(),
+            undefined,
+            targetField,
+          );
+          lastTap = second.next;
+          if (second.action === "edit") beginEdit(target, targetField);
+          return second.action;
+        },
+      };
+    </script>
+  </body>
 </html>

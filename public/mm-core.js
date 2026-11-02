@@ -2,7 +2,32 @@
 
 export const STORAGE_KEY = "mm.wenfu.dev/v1";
 export const RECENT_ICONS_KEY = "mm.wenfu.dev/icons/recent";
+export const MODE_KEY = "mm.wenfu.dev/mode";
 export const DOUBLE_TAP_MS = 350;
+
+/** App mode is either read-only (`view`) or editable (`edit`). Unknown values stay editable. */
+export function normalizeAppMode(value) {
+  return value === "view" ? "view" : "edit";
+}
+
+export function readAppMode(storage = globalThis.localStorage, key = MODE_KEY) {
+  if (!storage) return "edit";
+  try {
+    return normalizeAppMode(storage.getItem(key));
+  } catch {
+    return "edit";
+  }
+}
+
+export function writeAppMode(mode, storage = globalThis.localStorage, key = MODE_KEY) {
+  if (!storage) return false;
+  try {
+    storage.setItem(key, normalizeAppMode(mode));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Curated emoji sets for the icon picker (tabs). */
 export const EMOJI_CATEGORIES = [
@@ -47,6 +72,196 @@ export const EMOJI_CATEGORIES = [
     emojis: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","💟","☮️","✝️","☪️","🕉️","☸️","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓","🆔","⚛️","🉑","☢️","☣️","📴","📳","🈶","🈚","🈸","🈺","🈷️","✴️","🆚","💮","🉐","㊙️","㊗️","🈴","🈵","🈹","🈲","🅰️","🅱️","🆎","🆑","🅾️","🆘","❌","⭕","🛑","⛔","📛","🚫","💯","💢","♨️","🚷","🚯","🚳","🚱","🔞","📵","🚭","❗","❕","❓","❔","‼️","⁉️","🔅","🔆","〽️","⚠️","🚸","🔱","⚜️","🔰","♻️","✅","🈯","💹","❇️","✳️","❎","🌐","💠","Ⓜ️","🌀","💤","🏧","🚾","♿","🅿️","🛗","🛂","🛃","🛄","🛅","♂️","♀️","⚧️","✖️","➕","➖","➗","♾️","‼️","⁉️","❓","❔","❕","❗","〰️","💱","💲","⚕️","♻️","⚜️","🔰","🔱","📛","⭕","✅","☑️","✔️","❌","❎","➰","➿","〽️","✳️","✴️","❇️","©️","®️","™️","#️⃣","*️⃣","0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟","🔠","🔡","🔢","🔣","🔤","🅰️","🆎","🅱️","🆑","🆒","🆓","ℹ️","🆔","Ⓜ️","🆕","🆖","🅾️","🆗","🅿️","🆘","🆙","🆚","🈁","🈂️","🔴","🟠","🟡","🟢","🔵","🟣","🟤","⚫","⚪","🟥","🟧","🟨","🟩","🟦","🟪","🟫","⬛","⬜","◼️","◻️","◾","◽","▪️","▫️","🔶","🔷","🔸","🔹","🔺","🔻","💠","🔘","🔳","🔲","🏁","🚩","🎌","🏴","🏳️","🏳️‍🌈","🏳️‍⚧️","🏴‍☠️"],
   },
 ];
+
+const CATEGORY_ALIAS = {
+  smileys: "表情 脸 情绪 face smile emotion",
+  people: "人物 人 手 people hand person",
+  nature: "自然 动物 植物 animal nature plant",
+  food: "食物 吃 水果 food fruit",
+  activity: "活动 运动 游戏 sport game activity",
+  travel: "旅行 交通 地点 travel place car",
+  objects: "物品 东西 object tool",
+  symbols: "符号 心 标记 symbol heart",
+};
+
+/** Search text for common icons. Unlisted icons still match their category name. */
+const EMOJI_KEYWORDS = {
+  "😀": "笑 微笑 开心 smile happy",
+  "😂": "笑哭 laugh",
+  "😍": "爱心眼 喜欢 love",
+  "🤔": "思考 think",
+  "😎": "酷 cool",
+  "😭": "哭 cry",
+  "👍": "赞 好 ok",
+  "👎": "踩 不好",
+  "👏": "鼓掌 clap",
+  "🙏": "谢谢 拜托 pray",
+  "💪": "加油 力量 muscle",
+  "👀": "看 eyes",
+  "🧠": "大脑 思考 brain",
+  "👨‍💻": "程序员 开发 developer",
+  "👩‍💻": "程序员 开发 developer",
+  "🧑‍💻": "程序员 开发 developer",
+  "🐶": "狗 dog",
+  "🐱": "猫 cat",
+  "🐼": "熊猫 panda",
+  "🦊": "狐狸 fox",
+  "🦁": "狮子 lion",
+  "🐸": "青蛙 frog",
+  "🐵": "猴子 monkey",
+  "🦄": "独角兽 unicorn",
+  "🐝": "蜜蜂 bee",
+  "🦋": "蝴蝶 butterfly",
+  "🐢": "乌龟 turtle",
+  "🐍": "蛇 snake",
+  "🐙": "章鱼 octopus",
+  "🐠": "鱼 fish",
+  "🐬": "海豚 dolphin",
+  "🐳": "鲸 whale",
+  "🌸": "花 樱花 flower",
+  "🌹": "玫瑰 rose",
+  "🌻": "向日葵 sunflower",
+  "🍀": "四叶草 clover luck",
+  "🌲": "树 tree",
+  "🌴": "棕榈 palm",
+  "🍎": "苹果 apple",
+  "🍏": "青苹果 apple",
+  "🍌": "香蕉 banana",
+  "🍇": "葡萄 grape",
+  "🍓": "草莓 strawberry",
+  "🍉": "西瓜 watermelon",
+  "🍑": "桃 peach",
+  "🍒": "樱桃 cherry",
+  "🥑": "牛油果 avocado",
+  "🥦": "西兰花 broccoli",
+  "🌽": "玉米 corn",
+  "🥕": "胡萝卜 carrot",
+  "🍞": "面包 bread",
+  "🧀": "奶酪 cheese",
+  "🥚": "蛋 egg",
+  "🍳": "煎蛋 egg",
+  "🍔": "汉堡 burger",
+  "🍟": "薯条 fries",
+  "🍕": "披萨 pizza",
+  "🌮": "塔可 taco",
+  "🍜": "面条 noodle",
+  "🍣": "寿司 sushi",
+  "🍱": "便当 bento",
+  "🥟": "饺子 dumpling",
+  "🍚": "米饭 rice",
+  "🍦": "冰淇淋 ice cream",
+  "🍰": "蛋糕 cake",
+  "🎂": "生日 蛋糕 birthday cake",
+  "☕": "咖啡 coffee",
+  "🍵": "茶 tea",
+  "🍺": "啤酒 beer",
+  "🍷": "红酒 wine",
+  "⚽": "足球 football soccer",
+  "🏀": "篮球 basketball",
+  "🎾": "网球 tennis",
+  "🏓": "乒乓 pingpong",
+  "🎯": "目标 target",
+  "🎮": "游戏 game",
+  "🎨": "画 艺术 art",
+  "🎬": "电影 movie",
+  "🎤": "麦克风 mic",
+  "🎧": "耳机 headphone",
+  "🎸": "吉他 guitar",
+  "🎲": "骰子 dice",
+  "🧩": "拼图 puzzle",
+  "🚗": "汽车 车 car",
+  "🚕": "出租车 taxi",
+  "🚌": "公交 bus",
+  "🚑": "救护车 ambulance",
+  "🚒": "消防车 fire",
+  "🚲": "自行车 bike",
+  "✈️": "飞机 plane flight",
+  "🚀": "火箭 rocket",
+  "🛸": "飞碟 ufo",
+  "🚁": "直升机 helicopter",
+  "⛵": "帆船 sail",
+  "🚢": "船 ship",
+  "🗺️": "地图 map",
+  "🏠": "家 房子 home house",
+  "🏢": "公司 办公楼 office",
+  "🏥": "医院 hospital",
+  "🏫": "学校 school",
+  "⛰️": "山 mountain",
+  "🌋": "火山 volcano",
+  "🏖️": "海滩 beach",
+  "⌚": "手表 watch",
+  "📱": "手机 phone mobile",
+  "💻": "电脑 笔记本 computer laptop",
+  "⌨️": "键盘 keyboard",
+  "🖥️": "显示器 电脑 desktop",
+  "🖨️": "打印机 printer",
+  "🖱️": "鼠标 mouse",
+  "📷": "相机 camera",
+  "📺": "电视 tv",
+  "💡": "灯泡 想法 idea light",
+  "🔋": "电池 battery",
+  "🔑": "钥匙 key",
+  "🔒": "锁 lock",
+  "🔓": "解锁 unlock",
+  "📦": "包裹 盒子 box package",
+  "📁": "文件夹 folder",
+  "📂": "文件夹 folder",
+  "📝": "笔记 备忘 note memo",
+  "✏️": "铅笔 pencil",
+  "📌": "图钉 pin",
+  "📎": "回形针 clip",
+  "📚": "书 book",
+  "📖": "书 book",
+  "🔍": "搜索 search",
+  "💰": "钱 money",
+  "💳": "信用卡 card",
+  "💎": "钻石 diamond",
+  "🔧": "扳手 工具 wrench tool",
+  "🔨": "锤子 hammer",
+  "⚙️": "齿轮 gear settings",
+  "💊": "药 pill",
+  "🧪": "实验 test",
+  "🎁": "礼物 gift",
+  "✉️": "邮件 信 mail email",
+  "📅": "日历 calendar",
+  "❤️": "爱心 红心 heart love",
+  "💔": "心碎 heartbreak",
+  "⭐": "星星 star",
+  "✅": "完成 勾 check done",
+  "❌": "错误 叉 error",
+  "⚠️": "警告 warning",
+  "❓": "问题 question",
+  "❗": "注意 感叹",
+  "💯": "一百分 满分",
+  "🔥": "火 fire hot",
+  "✨": "闪光 sparkle",
+  "⭐️": "星星 star",
+};
+
+export function searchEmojis(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return [];
+  const cjk = /[\u3400-\u9fff]/.test(q);
+  const hit = (text) => {
+    const value = String(text || "").toLowerCase();
+    if (!value) return false;
+    if (cjk) return value.includes(q);
+    return value.split(/[\s,]+/).some((word) => word.startsWith(q));
+  };
+  const hits = [];
+  const seen = new Set();
+  for (const cat of EMOJI_CATEGORIES) {
+    const catHit = hit(`${cat.label} ${CATEGORY_ALIAS[cat.id] || ""}`);
+    for (const emoji of cat.emojis) {
+      if (seen.has(emoji)) continue;
+      if (catHit || emoji.includes(q) || hit(EMOJI_KEYWORDS[emoji])) {
+        seen.add(emoji);
+        hits.push(emoji);
+      }
+    }
+  }
+  return hits;
+}
 
 export const DOWNLOAD_FORMATS = [
   { id: "markdown", label: "Markdown", ext: ".md", mime: "text/markdown;charset=utf-8", available: true },
@@ -250,15 +465,18 @@ export function buildDownload(tree, formatId = "markdown", name) {
 }
 
 /**
- * First click selects; a second click on the same node within the threshold edits.
+ * First click selects; a second click on the same node and field within the
+ * threshold edits. Title and subtitle are separate targets.
  * Needed because selecting redraws SVG and destroys the DOM target, so native
  * `dblclick` never fires.
  */
-export function recognizeNodeTap(prev, node, now = Date.now(), threshold = DOUBLE_TAP_MS) {
-  if (prev && prev.node === node && now - prev.time <= threshold) {
-    return { action: "edit", next: { node: null, time: 0 } };
+export function recognizeNodeTap(prev, node, now = Date.now(), threshold = DOUBLE_TAP_MS, field = "title") {
+  const target = field === "subtitle" ? "subtitle" : "title";
+  const prevField = prev && prev.field === "subtitle" ? "subtitle" : "title";
+  if (prev && prev.node === node && prevField === target && now - prev.time <= threshold) {
+    return { action: "edit", field: target, next: { node: null, field: null, time: 0 } };
   }
-  return { action: "select", next: { node, time: now } };
+  return { action: "select", field: target, next: { node, field: target, time: now } };
 }
 
 export function createLocalStore(storage = globalThis.localStorage, key = STORAGE_KEY) {
