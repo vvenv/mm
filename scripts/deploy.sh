@@ -44,11 +44,20 @@ fi
 
 install_nginx "$ROOT/deploy/nginx/${DOMAIN}.conf"
 
-log "检查 https://${DOMAIN}/"
-html="$(curl -fsS "https://${DOMAIN}/")"
-printf '%s' "$html" | grep -q 'Markdown Mindmap' || die "首页没有「Markdown Mindmap」"
-curl -fsS -o /dev/null "https://${DOMAIN}/"
-core_type="$(curl -fsSI "https://${DOMAIN}/mm-core.js" | tr -d '\r' | grep -i '^content-type:' | head -1)"
+log "检查已同步文件与 https://${DOMAIN}/"
+remote_ssh "grep -aq 'Markdown Mindmap' $(printf '%q' "$WEB_ROOT/index.html")" || die "远端首页没有「Markdown Mindmap」"
+UA='Mozilla/5.0 (compatible; mm-deploy/1.0)'
+ok=0
+for _ in 1 2 3 4 5; do
+  code="$(curl -sS -o /tmp/mm-deploy-check.html -w '%{http_code}' -A "$UA" "https://${DOMAIN}/" || true)"
+  if [ "$code" = "200" ] && grep -aq 'Markdown Mindmap' /tmp/mm-deploy-check.html; then
+    ok=1
+    break
+  fi
+  sleep 1
+done
+[ "$ok" = 1 ] || die "HTTPS 首页检查失败（可能被 CDN 暂时拦截）"
+core_type="$(curl -fsSI -A "$UA" "https://${DOMAIN}/mm-core.js" | tr -d '\r' | grep -i '^content-type:' | head -1)"
 printf '%s\n' "$core_type" | grep -Eqi 'javascript|ecmascript' || die "mm-core.js Content-Type 异常：$core_type"
 
 log "已发布 https://${DOMAIN}/"

@@ -5,12 +5,14 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   DOUBLE_TAP_MS,
+  EMOJI_CATEGORIES,
   buildDownload,
   captureState,
   cloneData,
   countNodes,
   createHistory,
   createLocalStore,
+  createRecentIconsStore,
   formatListLabel,
   nodeAtPath,
   normalizeDownloadName,
@@ -19,6 +21,7 @@ import {
   pathToNode,
   recognizeNodeTap,
   shouldConfirmOverwrite,
+  splitLeadingIcon,
   toMarkdown,
 } from "../public/mm-core.js";
 
@@ -89,6 +92,48 @@ test("list item subtitle round-trips via ::", () => {
   assert.equal(again.children[0].children[0].title, "子项");
   assert.equal(again.children[0].children[0].subtitle, "说明");
   assert.match(toMarkdown(tree), /- 主驾驶 :: 人审关键/);
+});
+
+test("splitLeadingIcon and icon markdown round-trip", () => {
+  assert.deepEqual(splitLeadingIcon("🚀 发射"), { icon: "🚀", title: "发射" });
+  assert.deepEqual(splitLeadingIcon("发射"), { icon: "", title: "发射" });
+  assert.deepEqual(splitLeadingIcon("🚀"), { icon: "", title: "🚀" });
+
+  const source = `# 🗺️ Root
+
+- 📤 上传 :: 说明
+  - 子项
+- 普通
+`;
+  const tree = parseMarkdown(source);
+  assert.equal(tree.icon, "🗺️");
+  assert.equal(tree.title, "Root");
+  assert.equal(tree.children[0].icon, "📤");
+  assert.equal(tree.children[0].title, "上传");
+  assert.equal(tree.children[0].subtitle, "说明");
+  assert.equal(formatListLabel(tree.children[0]), "📤 上传 :: 说明");
+
+  const again = parseMarkdown(toMarkdown(tree));
+  assert.equal(again.icon, "🗺️");
+  assert.equal(again.children[0].icon, "📤");
+  assert.equal(again.children[1].icon, undefined);
+});
+
+test("createRecentIconsStore keeps newest-first unique list", () => {
+  const memory = new Map();
+  const storage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+    removeItem: (key) => memory.delete(key),
+  };
+  const store = createRecentIconsStore(storage, "icons", 3);
+  assert.deepEqual(store.push("🚀"), ["🚀"]);
+  assert.deepEqual(store.push("🎨"), ["🎨", "🚀"]);
+  assert.deepEqual(store.push("🚀"), ["🚀", "🎨"]);
+  assert.deepEqual(store.push("📤"), ["📤", "🚀", "🎨"]);
+  assert.deepEqual(store.push("⬇️"), ["⬇️", "📤", "🚀"]);
+  assert.ok(EMOJI_CATEGORIES.length >= 3);
+  assert.ok(EMOJI_CATEGORIES.every((c) => c.id && c.label && c.emojis.length));
 });
 
 test("node notes round-trip via blockquotes", () => {
@@ -196,6 +241,9 @@ test("index.html wires recognizeNodeTap and does not rely on native dblclick", (
   assert.match(html, /data-act="note"/);
   assert.match(html, /openNote\(selected/);
   assert.match(html, /notePop/);
+  assert.match(html, /iconPop/);
+  assert.match(html, /openIconPicker/);
+  assert.match(html, /createRecentIconsStore/);
   assert.equal(/requestDelete/.test(html), false);
 });
 

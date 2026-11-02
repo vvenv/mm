@@ -117,6 +117,53 @@
   }
   .note-pop .note-foot button:hover { border-color: #999; }
   .note-pop .note-foot button.primary:hover { border-color: #000; background: #222; }
+  .icon-pop {
+    position: fixed; z-index: 4;
+    display: none; width: min(360px, calc(100vw - 24px));
+    margin: 0; padding: 0;
+    border: 1px solid #ddd; border-radius: 10px; background: #fff; color: #222;
+    box-shadow: 0 10px 28px rgba(0,0,0,.12);
+    overflow: hidden;
+  }
+  .icon-pop.show { display: flex; flex-direction: column; max-height: min(420px, calc(100vh - 24px)); }
+  .icon-pop .icon-tabs {
+    display: flex; flex-wrap: nowrap; gap: 2px;
+    padding: 8px 8px 0; overflow-x: auto; border-bottom: 1px solid #eee;
+  }
+  .icon-pop .icon-tabs button {
+    flex: 0 0 auto; margin: 0; padding: 7px 10px;
+    border: 0; border-radius: 7px 7px 0 0; background: transparent; color: #666;
+    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    cursor: pointer;
+  }
+  .icon-pop .icon-tabs button.active {
+    background: #f3f3f3; color: #111; font-weight: 600;
+  }
+  .icon-pop .icon-grid {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    padding: 8px; overflow: auto; flex: 1 1 auto;
+  }
+  .icon-pop .icon-grid button {
+    margin: 0; padding: 0; width: 100%; aspect-ratio: 1;
+    border: 0; border-radius: 8px; background: transparent;
+    font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  .icon-pop .icon-grid button:hover { background: #f3f3f3; }
+  .icon-pop .icon-empty {
+    margin: 0; padding: 28px 16px; text-align: center; color: #999;
+    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  .icon-pop .icon-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 8px 10px; border-top: 1px solid #eee; background: #fafafa;
+  }
+  .icon-pop .icon-foot button {
+    margin: 0; padding: 6px 10px;
+    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    cursor: pointer;
+  }
+  .icon-pop .icon-foot button:hover { border-color: #999; }
   .help:hover .help-tip,
   .help:focus-within .help-tip,
   .help.open .help-tip {
@@ -237,6 +284,7 @@
       <li>右键 / 长按打开菜单</li>
       <li>菜单可设副标题（Markdown：标题 :: 副标题）</li>
       <li>点击便签图标查看备注；双击或长按内容编辑</li>
+      <li>点击节点前 emoji 更换图标（含最近使用）</li>
       <li>⌘Z 撤销 · ⌘⇧Z 重做</li>
       <li>Tab 加子节点</li>
       <li>Enter 加同级</li>
@@ -279,6 +327,14 @@
     <button type="button" class="primary" id="noteSave">保存</button>
   </div>
 </div>
+<div class="icon-pop" id="iconPop" role="dialog" aria-label="选择图标">
+  <div class="icon-tabs" id="iconTabs" role="tablist"></div>
+  <div class="icon-grid" id="iconGrid" role="tabpanel"></div>
+  <div class="icon-foot">
+    <button type="button" id="iconClear">清除图标</button>
+    <button type="button" id="iconClose">关闭</button>
+  </div>
+</div>
 <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div class="modal">
     <h2 id="confirmTitle">覆盖当前导图？</h2>
@@ -306,11 +362,13 @@
 <script type="module">
 import {
   DOWNLOAD_FORMATS,
+  EMOJI_CATEGORIES,
   buildDownload,
   captureState,
   cloneData,
   createHistory,
   createLocalStore,
+  createRecentIconsStore,
   nodeAtPath,
   normalizeDownloadName,
   pageTitleOf,
@@ -319,17 +377,20 @@ import {
   recognizeNodeTap,
   shouldConfirmOverwrite,
   toMarkdown,
-} from "./mm-core.js?v=20261102i";
+} from "./mm-core.js?v=20261102j";
 
 const store = createLocalStore();
 const history = createHistory();
+const recentIcons = createRecentIconsStore();
 const DEMO = {
   title: "Markdown Mindmap",
   subtitle: "mm.wenfu.dev",
+  icon: "🗺️",
   open: true,
   children: [
     {
       title: "上传大纲",
+      icon: "📤",
       open: true,
       children: [
         { title: "# 标题 → 中心", children: [] },
@@ -339,6 +400,7 @@ const DEMO = {
     {
       title: "编辑节点",
       subtitle: "标题与副标题",
+      icon: "✏️",
       open: true,
       children: [
         { title: "双击行内编辑", children: [] },
@@ -348,10 +410,11 @@ const DEMO = {
           note: "也可用菜单添加备注；导出为引用块 >",
           children: [],
         },
+        { title: "点击前导 emoji 换图标", icon: "🎨", children: [] },
         { title: "Tab / Enter 快捷键", children: [] },
       ],
     },
-    { title: "下载可选文件名与格式", children: [] },
+    { title: "下载可选文件名与格式", icon: "⬇️", children: [] },
   ],
 };
 
@@ -373,6 +436,8 @@ let noteEditing = false;
 let noteBaseline = null;
 let noteLongPressTimer = null;
 let noteLastTap = { time: 0 };
+let iconNode = null;
+let iconTabId = "recent";
 
 const NS = "http://www.w3.org/2000/svg";
 const LONG_PRESS_MS = 520;
@@ -394,6 +459,9 @@ const notePop = document.getElementById("notePop");
 const noteView = document.getElementById("noteView");
 const noteEdit = document.getElementById("noteEdit");
 const noteFoot = document.getElementById("noteFoot");
+const iconPop = document.getElementById("iconPop");
+const iconTabs = document.getElementById("iconTabs");
+const iconGrid = document.getElementById("iconGrid");
 svg.appendChild(viewport);
 
 const GAP_X = 56;
@@ -401,6 +469,8 @@ const GAP_Y = 18;
 const SUBTITLE_SIZE = 13;
 const SUBTITLE_GAP = 4;
 const NOTE_ICON_W = 22;
+const NODE_ICON_W = 26;
+const ICON_TABS = [{ id: "recent", label: "最近" }, ...EMOJI_CATEGORIES.map((c) => ({ id: c.id, label: c.label }))];
 const song = '"Songti SC", "STSongti-SC-Regular", "Noto Serif SC", serif';
 const sans = '"PingFang SC", "Hiragino Sans GB", sans-serif';
 const styles = [
@@ -427,6 +497,10 @@ function noteText(node) {
 
 function nodeHasNote(node) {
   return !!(node && String(node.note || "").trim());
+}
+
+function iconText(node) {
+  return node && node.icon ? String(node.icon).trim() : "";
 }
 
 DOWNLOAD_FORMATS.forEach((format) => {
@@ -574,8 +648,9 @@ function layout(node) {
   node.hasChildren = node.children.length > 0;
   node.marker = node.hasChildren && !node.open ? node.children.length : 0;
   node.markerW = node.hasChildren ? 24 + (node.marker ? textWidth(String(node.marker), "400 13px " + sans) + 8 : 0) : 0;
+  node.iconW = NODE_ICON_W;
   node.noteW = nodeHasNote(node) ? NOTE_ICON_W : 0;
-  node.w = node.labelW + node.noteW + node.markerW;
+  node.w = node.iconW + node.labelW + node.noteW + node.markerW;
   if (!node.open || !node.hasChildren) {
     node.subtreeH = node.h;
     return;
@@ -640,7 +715,7 @@ function noteAnchorRect() {
   if (!noteNode || !noteNode.style) {
     return { left: window.innerWidth / 2 - 140, top: 80, bottom: 100 };
   }
-  const x = noteNode.x + noteNode.labelW + 4;
+  const x = noteNode.x + (noteNode.iconW || 0) + noteNode.labelW + 4;
   const y = noteNode.y + noteNode.h / 2;
   const pt = screenPoint(x, y);
   return { left: pt.x, top: pt.y - 10, bottom: pt.y + 10 };
@@ -658,6 +733,7 @@ function openNote(node, { edit = false, clientX, clientY } = {}) {
   if (!node) return;
   if (editing) commitEdit(true);
   hideCtxMenu();
+  hideIconPop();
   if (noteNode && noteNode !== node && noteEditing) commitNote(true);
   selected = node;
   noteNode = node;
@@ -733,10 +809,120 @@ function isSecondaryPointer(event) {
   return event.button === 2 || (event.button === 0 && event.ctrlKey);
 }
 
+function hideIconPop() {
+  iconPop.classList.remove("show");
+  iconNode = null;
+}
+
+function positionIconPop(anchor) {
+  const pad = 8;
+  const width = iconPop.offsetWidth || 360;
+  const height = iconPop.offsetHeight || 320;
+  let left = anchor.left;
+  let top = anchor.bottom + 8;
+  if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
+  if (top + height > window.innerHeight - pad) top = Math.max(pad, anchor.top - height - 8);
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  iconPop.style.left = `${left}px`;
+  iconPop.style.top = `${top}px`;
+}
+
+function emojisForTab(tabId) {
+  if (tabId === "recent") return recentIcons.load();
+  const cat = EMOJI_CATEGORIES.find((item) => item.id === tabId);
+  return cat ? cat.emojis : [];
+}
+
+function renderIconPicker() {
+  iconTabs.replaceChildren();
+  ICON_TABS.forEach((tab) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.setAttribute("role", "tab");
+    btn.textContent = tab.label;
+    btn.className = tab.id === iconTabId ? "active" : "";
+    btn.setAttribute("aria-selected", tab.id === iconTabId ? "true" : "false");
+    btn.addEventListener("click", () => {
+      iconTabId = tab.id;
+      renderIconPicker();
+    });
+    iconTabs.appendChild(btn);
+  });
+
+  const emojis = emojisForTab(iconTabId);
+  iconGrid.replaceChildren();
+  if (!emojis.length) {
+    const empty = document.createElement("p");
+    empty.className = "icon-empty";
+    empty.textContent = iconTabId === "recent" ? "还没有最近使用，选一个会出现在这里" : "暂无图标";
+    iconGrid.appendChild(empty);
+    return;
+  }
+  emojis.forEach((emoji) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = emoji;
+    btn.title = emoji;
+    btn.addEventListener("click", () => applyNodeIcon(emoji));
+    iconGrid.appendChild(btn);
+  });
+}
+
+function openIconPicker(node, event) {
+  if (!node) return;
+  if (editing) commitEdit(true);
+  hideCtxMenu();
+  hideNotePop({ save: true });
+  selected = node;
+  iconNode = node;
+  if (iconTabId !== "recent" && !recentIcons.load().length) iconTabId = "recent";
+  // Prefer recent tab when opening so用户先看到最近使用
+  iconTabId = "recent";
+  renderIconPicker();
+  iconPop.classList.add("show");
+  const anchor = event
+    ? { left: event.clientX, top: event.clientY, bottom: event.clientY }
+    : (() => {
+      const pt = screenPoint(node.x, node.y + node.h / 2);
+      return { left: pt.x, top: pt.y - 12, bottom: pt.y + 12 };
+    })();
+  positionIconPop(anchor);
+  updateChrome();
+  draw();
+}
+
+function applyNodeIcon(emoji) {
+  if (!iconNode) return;
+  const node = iconNode;
+  const next = String(emoji || "").trim();
+  const prev = iconText(node);
+  if (next === prev) {
+    hideIconPop();
+    draw();
+    return;
+  }
+  pushHistory();
+  if (next) {
+    node.icon = next;
+    recentIcons.push(next);
+  } else {
+    delete node.icon;
+  }
+  hideIconPop();
+  relayout(node);
+  saveLocal();
+}
+
+function clearNodeIcon() {
+  applyNodeIcon("");
+}
+
 function showCtxMenu(clientX, clientY, node) {
   if (!node || editing) return;
   clearLongPress();
   hideNotePop({ save: true });
+  hideIconPop();
   if (selected !== node) {
     selected = node;
     lastTap = { node: null, time: 0 };
@@ -815,21 +1001,57 @@ function draw() {
     const contentTop = node.y + (node.h - contentH) / 2;
     const titleY = contentTop + node.style.size / 2;
     const subY = contentTop + node.style.size + SUBTITLE_GAP + SUBTITLE_SIZE / 2;
+    const textX = node.x + (node.iconW || 0);
+    const bodyW = (node.iconW || 0) + node.labelW;
 
-    if (node === selected || isEditingNode) {
+    if (node === selected || isEditingNode || iconNode === node) {
       const sel = document.createElementNS(NS, "rect");
       sel.setAttribute("x", node.x - 10);
       sel.setAttribute("y", node.y + 2);
-      sel.setAttribute("width", Math.max(node.labelW, 48) + 20);
+      sel.setAttribute("width", Math.max(bodyW, 48) + 20);
       sel.setAttribute("height", node.h - 4);
       sel.setAttribute("rx", 4);
       sel.setAttribute("fill", "#f0f0f0");
       group.appendChild(sel);
     }
 
+    {
+      const iconHit = document.createElementNS(NS, "rect");
+      iconHit.setAttribute("x", node.x - 2);
+      iconHit.setAttribute("y", node.y + 2);
+      iconHit.setAttribute("width", node.iconW || NODE_ICON_W);
+      iconHit.setAttribute("height", node.h - 4);
+      iconHit.setAttribute("fill", "transparent");
+      iconHit.style.cursor = "pointer";
+      iconHit.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        if (isSecondaryPointer(event)) return;
+        event.preventDefault();
+        openIconPicker(node, event);
+      });
+      group.appendChild(iconHit);
+
+      const iconLabel = document.createElementNS(NS, "text");
+      iconLabel.setAttribute("x", node.x + (node.iconW || NODE_ICON_W) / 2 - 1);
+      iconLabel.setAttribute("y", node.y + node.h / 2);
+      iconLabel.setAttribute("text-anchor", "middle");
+      iconLabel.setAttribute("dominant-baseline", "central");
+      iconLabel.setAttribute("font-size", Math.max(14, Math.min(18, node.style.size - 2)));
+      iconLabel.style.pointerEvents = "none";
+      if (iconText(node)) {
+        iconLabel.textContent = iconText(node);
+      } else {
+        iconLabel.textContent = "○";
+        iconLabel.setAttribute("fill", "#bbb");
+        iconLabel.setAttribute("font-family", sans);
+        iconLabel.setAttribute("font-size", 12);
+      }
+      group.appendChild(iconLabel);
+    }
+
     if (!isEditingNode) {
       const hit = document.createElementNS(NS, "rect");
-      hit.setAttribute("x", node.x - 8);
+      hit.setAttribute("x", textX - 4);
       hit.setAttribute("y", node.y);
       hit.setAttribute("width", Math.max(node.labelW, 12) + 8);
       hit.setAttribute("height", node.h);
@@ -837,7 +1059,7 @@ function draw() {
       group.appendChild(hit);
 
       const label = document.createElementNS(NS, "text");
-      label.setAttribute("x", node.x);
+      label.setAttribute("x", textX);
       label.setAttribute("y", titleY);
       label.setAttribute("dominant-baseline", "central");
       label.setAttribute("fill", node.style.fill);
@@ -849,7 +1071,7 @@ function draw() {
 
       if (showSub) {
         const sub = document.createElementNS(NS, "text");
-        sub.setAttribute("x", node.x);
+        sub.setAttribute("x", textX);
         sub.setAttribute("y", subY);
         sub.setAttribute("dominant-baseline", "central");
         sub.setAttribute("fill", "#888");
@@ -866,7 +1088,7 @@ function draw() {
 
       if (editingTitle) {
         const fo = document.createElementNS(NS, "foreignObject");
-        fo.setAttribute("x", node.x - 6);
+        fo.setAttribute("x", textX - 6);
         fo.setAttribute("y", contentTop - 2);
         fo.setAttribute("width", editW);
         fo.setAttribute("height", node.style.size + 8);
@@ -884,7 +1106,7 @@ function draw() {
         editInput = input;
       } else {
         const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", node.x);
+        label.setAttribute("x", textX);
         label.setAttribute("y", titleY);
         label.setAttribute("dominant-baseline", "central");
         label.setAttribute("fill", node.style.fill);
@@ -897,7 +1119,7 @@ function draw() {
 
       if (editingSub) {
         const fo = document.createElementNS(NS, "foreignObject");
-        fo.setAttribute("x", node.x - 6);
+        fo.setAttribute("x", textX - 6);
         fo.setAttribute("y", contentTop + node.style.size + SUBTITLE_GAP - 2);
         fo.setAttribute("width", editW);
         fo.setAttribute("height", SUBTITLE_SIZE + 8);
@@ -916,7 +1138,7 @@ function draw() {
         editInput = input;
       } else if (showSub) {
         const sub = document.createElementNS(NS, "text");
-        sub.setAttribute("x", node.x);
+        sub.setAttribute("x", textX);
         sub.setAttribute("y", subY);
         sub.setAttribute("dominant-baseline", "central");
         sub.setAttribute("fill", "#888");
@@ -977,7 +1199,7 @@ function draw() {
     }
 
     if (node.noteW) {
-      const nx = node.x + node.labelW + 11;
+      const nx = node.x + (node.iconW || 0) + node.labelW + 11;
       const ny = node.y + node.h / 2;
       const noteIcon = document.createElementNS(NS, "g");
       noteIcon.style.cursor = "pointer";
@@ -1007,7 +1229,7 @@ function draw() {
     }
 
     if (node.hasChildren) {
-      const baseRight = (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + (node.noteW || 0);
+      const baseRight = (node.iconW || 0) + (isEditingNode ? Math.max(node.labelW, 48) + 20 : node.labelW) + (node.noteW || 0);
       const mx = node.x + baseRight + 16;
       const my = node.y + node.h / 2;
       const mark = document.createElementNS(NS, "circle");
@@ -1234,6 +1456,7 @@ function beginEdit(node, field = "title") {
   if (!node) return;
   hideCtxMenu();
   hideNotePop({ save: true });
+  hideIconPop();
   const nextField = field === "subtitle" ? "subtitle" : "title";
   if (editing && selected === node && editField === nextField) {
     editInput && editInput.focus();
@@ -1428,6 +1651,12 @@ undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 
 window.addEventListener("keydown", (event) => {
+  if (iconPop.classList.contains("show") && event.key === "Escape") {
+    event.preventDefault();
+    hideIconPop();
+    draw();
+    return;
+  }
   if (notePop.classList.contains("show") && event.key === "Escape") {
     event.preventDefault();
     if (noteEditing) document.getElementById("noteCancel").click();
@@ -1639,10 +1868,21 @@ if (cached) {
   prepare(tree, true);
 }
 frame();
+iconPop.addEventListener("pointerdown", (event) => event.stopPropagation());
+document.getElementById("iconClear").addEventListener("click", () => clearNodeIcon());
+document.getElementById("iconClose").addEventListener("click", () => {
+  hideIconPop();
+  draw();
+});
+
 window.addEventListener("pointerdown", (event) => {
   if (ctxMenu.classList.contains("show") && !ctxMenu.contains(event.target)) hideCtxMenu();
   if (notePop.classList.contains("show") && !notePop.contains(event.target)) {
     hideNotePop({ save: true });
+    draw();
+  }
+  if (iconPop.classList.contains("show") && !iconPop.contains(event.target)) {
+    hideIconPop();
     draw();
   }
 });
@@ -1650,6 +1890,7 @@ window.addEventListener("pointerdown", (event) => {
 window.addEventListener("resize", () => {
   hideCtxMenu();
   if (notePop.classList.contains("show")) hideNotePop({ save: true });
+  if (iconPop.classList.contains("show")) hideIconPop();
   if (!editing) frame();
 });
 
