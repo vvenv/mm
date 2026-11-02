@@ -1,41 +1,89 @@
 #!/usr/bin/env node
 /**
- * 把讲稿导出成思维导图。
+ * 把 Markdown 大纲转成思维导图。
  *
- * 中心是标题，往右展开：部分 → 小节 → 每页主标题 → 关键句。
- * 口播不进导图。
+ * 支持：# 标题、## 副标题、嵌套列表（- / * / +，Tab 或空格缩进）。
+ * 输出：交互式 HTML + XMind。
  *
  *   node md2mindmap.js
  *   node md2mindmap.js 打不过就加入.md
+ *   node md2mindmap.js outline.md --html-only
+ *   node md2mindmap.js outline.md --xmind-only
  */
 
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { parse } = require("./md2slides");
 
-function buildTree(slides) {
-  const root = { title: "打不过就加入", children: [] };
-  let chapter = null;
-  let subsection = null;
-  for (const slide of slides) {
-    if (!chapter || chapter.title !== slide.chapter) {
-      chapter = { title: slide.chapter, children: [] };
-      root.children.push(chapter);
-      subsection = null;
+function indentWidth(prefix) {
+  let width = 0;
+  for (const ch of prefix) width += ch === "\t" ? 2 : 1;
+  return width;
+}
+
+function parse(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const root = { title: "Mindmap", children: [] };
+  let subtitle = "";
+  const stack = [{ indent: -1, node: root }];
+  let sawList = false;
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) continue;
+
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const title = heading[2].trim();
+      if (level === 1) {
+        root.title = title;
+        continue;
+      }
+      if (level === 2 && !sawList && !subtitle && root.children.length === 0) {
+        subtitle = title;
+        continue;
+      }
+      const indent = (level - 2) * 2;
+      const node = { title, children: [] };
+      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+      stack[stack.length - 1].node.children.push(node);
+      stack.push({ indent, node });
+      continue;
     }
-    const subTitle = slide.subsection || "未分组";
-    if (!subsection || subsection.title !== subTitle) {
-      subsection = { title: subTitle, children: [] };
-      chapter.children.push(subsection);
-    }
-    subsection.children.push({
-      title: `${slide.number}. ${slide.title}`,
-      children: slide.points.map((title) => ({ title, children: [] })),
-    });
+
+    const item = line.match(/^(\s*)[-*+]\s+(.+)$/);
+    if (!item) continue;
+
+    sawList = true;
+    const indent = indentWidth(item[1]);
+    const node = { title: item[2].trim(), children: [] };
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ indent, node });
   }
+
+  if (!root.children.length) throw new Error("没有解析到任何大纲节点（需要标题或列表）");
+  root.subtitle = subtitle;
   return root;
+}
+
+function toMarkdown(tree) {
+  const lines = [`# ${tree.title}`];
+  if (tree.subtitle) lines.push(`## ${tree.subtitle}`);
+  lines.push("");
+  function walk(node, depth) {
+    lines.push(`${"  ".repeat(depth)}- ${node.title}`);
+    node.children.forEach((child) => walk(child, depth + 1));
+  }
+  tree.children.forEach((child) => walk(child, 0));
+  lines.push("");
+  return lines.join("\n");
+}
+
+function countNodes(node) {
+  return 1 + node.children.reduce((sum, child) => sum + countNodes(child), 0);
 }
 
 function writeXmind(tree, outPath) {
@@ -62,7 +110,7 @@ function writeXmind(tree, outPath) {
     JSON.stringify({
       dataStructureVersion: "2",
       layoutEngineVersion: "3",
-      creator: { name: "md2mindmap", version: "1.0.0" },
+      creator: { name: "md2mindmap", version: "1.1.0" },
     }),
   );
   fs.writeFileSync(
@@ -75,32 +123,76 @@ function writeXmind(tree, outPath) {
 }
 
 function writeHtml(tree, outPath) {
-  const data = JSON.stringify(tree).replace(/</g, "\\u003c");
+  const pageTitle = tree.subtitle ? `${tree.title} · ${tree.subtitle}` : tree.title;
+  const data = JSON.stringify({
+    title: tree.title,
+    subtitle: tree.subtitle || "",
+    children: tree.children,
+  }).replace(/</g, "\\u003c");
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>打不过就加入 · 思维导图</title>
+<title>${escapeHtml(pageTitle)} · 思维导图</title>
 <style>
   html, body { margin: 0; height: 100%; background: #fff; color: #111; overflow: hidden; }
   svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
   svg.dragging { cursor: grabbing; }
+  .toolbar {
+    position: fixed; top: 12px; left: 14px; z-index: 2;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .toolbar button {
+    margin: 0; padding: 7px 12px;
+    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+    font: 13px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    cursor: pointer;
+  }
+  .toolbar button:hover { border-color: #999; }
+  .toolbar input[type="file"] { display: none; }
   .hint {
     position: fixed; top: 14px; right: 18px; margin: 0;
     font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
     color: #999; pointer-events: none;
   }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    margin: 0; padding: 8px 14px; border-radius: 6px;
+    background: #111; color: #fff;
+    font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  .drop {
+    position: fixed; inset: 0; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.82);
+    border: 2px dashed #111; box-sizing: border-box;
+    font: 18px/1.4 "Songti SC", "STSongti-SC-Regular", serif;
+    color: #111; pointer-events: none;
+  }
+  body.dragging-file .drop { display: flex; }
 </style>
 </head>
 <body>
-<svg id="map" role="img" aria-label="打不过就加入思维导图"></svg>
-<p class="hint">点击展开 · 拖拽移动 · 按住 ⌘ 滚轮缩放</p>
+<div class="toolbar">
+  <button type="button" id="uploadBtn">上传 Markdown</button>
+  <button type="button" id="downloadBtn">下载 Markdown</button>
+  <input id="fileInput" type="file" accept=".md,.markdown,text/markdown,text/plain">
+</div>
+<svg id="map" role="img" aria-label="${escapeHtml(pageTitle)}思维导图"></svg>
+<p class="hint">点击展开 · 拖拽移动 · 按住 ⌘ 滚轮缩放 · 可拖入 .md</p>
+<div class="drop" id="dropHint">松开以导入 Markdown</div>
+<p class="toast" id="toast" role="status"></p>
 <script>
-const tree = ${data};
+let tree = ${data};
+let fileName = ${JSON.stringify(path.basename(outPath).replace(/-思维导图\.html$/i, ".md"))};
 const NS = "http://www.w3.org/2000/svg";
 const svg = document.getElementById("map");
 const viewport = document.createElementNS(NS, "g");
+const toastEl = document.getElementById("toast");
+const fileInput = document.getElementById("fileInput");
 svg.appendChild(viewport);
 
 const GAP_X = 56;
@@ -115,14 +207,84 @@ const styles = [
   { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
 ];
 
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
+function indentWidth(prefix) {
+  let width = 0;
+  for (const ch of prefix) width += ch === "\\t" ? 2 : 1;
+  return width;
+}
+
+function parseMarkdown(markdown) {
+  const lines = markdown.split(/\\r?\\n/);
+  const root = { title: "Mindmap", subtitle: "", children: [] };
+  const stack = [{ indent: -1, node: root }];
+  let sawList = false;
+  for (const raw of lines) {
+    const line = raw.replace(/\\s+$/, "");
+    if (!line.trim()) continue;
+    const heading = line.match(/^(#{1,6})\\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const title = heading[2].trim();
+      if (level === 1) { root.title = title; continue; }
+      if (level === 2 && !sawList && !root.subtitle && root.children.length === 0) {
+        root.subtitle = title;
+        continue;
+      }
+      const indent = (level - 2) * 2;
+      const node = { title, children: [] };
+      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+      stack[stack.length - 1].node.children.push(node);
+      stack.push({ indent, node });
+      continue;
+    }
+    const item = line.match(/^(\\s*)[-*+]\\s+(.+)$/);
+    if (!item) continue;
+    sawList = true;
+    const indent = indentWidth(item[1]);
+    const node = { title: item[2].trim(), children: [] };
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ indent, node });
+  }
+  if (!root.children.length) throw new Error("没有解析到任何大纲节点");
+  return root;
+}
+
+function toMarkdown(node) {
+  const lines = ["# " + node.title];
+  if (node.subtitle) lines.push("## " + node.subtitle);
+  lines.push("");
+  function walk(item, depth) {
+    lines.push("  ".repeat(depth) + "- " + item.title);
+    item.children.forEach((child) => walk(child, depth + 1));
+  }
+  node.children.forEach((child) => walk(child, 0));
+  lines.push("");
+  return lines.join("\\n");
+}
+
+function pageTitleOf(node) {
+  return node.subtitle ? node.title + " · " + node.subtitle : node.title;
+}
+
 function walk(node, depth, visit) {
   visit(node, depth);
   node.children.forEach((child) => walk(child, depth + 1, visit));
 }
-walk(tree, 0, (node, depth) => {
-  node.depth = depth;
-  node.open = depth < 3;
-});
+
+function prepare(node) {
+  walk(node, 0, (item, depth) => {
+    item.depth = depth;
+    item.open = depth < 2;
+  });
+}
 
 const measureCanvas = document.createElement("canvas").getContext("2d");
 function textWidth(text, font) {
@@ -193,7 +355,6 @@ function draw() {
       });
     }
     const group = document.createElementNS(NS, "g");
-    group.setAttribute("data-id", node.title + "@" + node.depth + "@" + node.x);
     group.style.cursor = node.hasChildren ? "pointer" : "default";
     const hit = document.createElementNS(NS, "rect");
     hit.setAttribute("x", node.x - 8);
@@ -327,26 +488,91 @@ function bounds() {
   })(tree);
   return { minX, minY, w: maxX - minX, h: maxY - minY };
 }
-function frame(anchor) {
+function frame() {
   layout(tree);
   place(tree, 0, 0);
   const box = bounds();
   const pad = 40;
-  if (!anchor) {
-    const fitW = (window.innerWidth - pad * 2) / box.w;
-    const fitH = (window.innerHeight - pad * 2) / box.h;
-    const fit = Math.min(fitW, fitH);
-    scale = Math.min(1, fit >= 0.78 ? fit : fitW);
-    tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
-    const fittedH = box.h * scale;
-    ty = fittedH < window.innerHeight - pad
-      ? (window.innerHeight - fittedH) / 2 - box.minY * scale
-      : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
-  }
+  const fitW = (window.innerWidth - pad * 2) / box.w;
+  const fitH = (window.innerHeight - pad * 2) / box.h;
+  const fit = Math.min(fitW, fitH);
+  scale = Math.min(1, fit >= 0.78 ? fit : fitW);
+  tx = (window.innerWidth - box.w * scale) / 2 - box.minX * scale;
+  const fittedH = box.h * scale;
+  ty = fittedH < window.innerHeight - pad
+    ? (window.innerHeight - fittedH) / 2 - box.minY * scale
+    : window.innerHeight / 2 - (tree.y + tree.h / 2) * scale;
   draw();
 }
-frame(null);
-window.addEventListener("resize", () => frame(null));
+
+function loadTree(next, name) {
+  tree = next;
+  if (name) fileName = name.replace(/\\.markdown$/i, ".md");
+  prepare(tree);
+  const title = pageTitleOf(tree);
+  document.title = title + " · 思维导图";
+  svg.setAttribute("aria-label", title + "思维导图");
+  frame();
+}
+
+async function importFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    loadTree(parseMarkdown(text), file.name || "outline.md");
+    toast("已导入 " + (file.name || "Markdown"));
+  } catch (error) {
+    toast(error.message || String(error));
+  }
+}
+
+function downloadMarkdown() {
+  const blob = new Blob([toMarkdown(tree)], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || ((tree.title || "mindmap") + ".md");
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("已下载 " + (fileName || "mindmap.md"));
+}
+
+document.getElementById("uploadBtn").addEventListener("click", () => fileInput.click());
+document.getElementById("downloadBtn").addEventListener("click", downloadMarkdown);
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files && fileInput.files[0];
+  fileInput.value = "";
+  importFile(file);
+});
+
+let dragDepth = 0;
+window.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  document.body.classList.add("dragging-file");
+});
+window.addEventListener("dragover", (event) => event.preventDefault());
+window.addEventListener("dragleave", (event) => {
+  event.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) document.body.classList.remove("dragging-file");
+});
+window.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging-file");
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (!file) return;
+  if (!/\\.(md|markdown|txt)$/i.test(file.name) && file.type && !/^text\\//.test(file.type)) {
+    toast("请拖入 Markdown 文本文件");
+    return;
+  }
+  importFile(file);
+});
+
+prepare(tree);
+frame();
+window.addEventListener("resize", frame);
 </script>
 </body>
 </html>
@@ -354,19 +580,40 @@ window.addEventListener("resize", () => frame(null));
   fs.writeFileSync(outPath, html);
 }
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function main() {
-  const input = path.resolve(process.argv[2] || path.join(__dirname, "打不过就加入.md"));
+  const args = process.argv.slice(2);
+  const flags = new Set(args.filter((arg) => arg.startsWith("--")));
+  const files = args.filter((arg) => !arg.startsWith("--"));
+  const input = path.resolve(files[0] || path.join(__dirname, "打不过就加入.md"));
+  if (!fs.existsSync(input)) throw new Error(`找不到文件：${input}`);
+
   const base = input.replace(/\.md$/i, "");
-  const slides = parse(fs.readFileSync(input, "utf8"));
-  const tree = buildTree(slides);
-  const xmind = `${base}.xmind`;
-  const html = `${base}-思维导图.html`;
-  writeXmind(tree, xmind);
-  writeHtml(tree, html);
-  const leaves = slides.reduce((sum, slide) => sum + slide.points.length, 0);
-  console.log(`${slides.length} pages, ${leaves} key lines`);
-  console.log(xmind);
-  console.log(html);
+  const tree = parse(fs.readFileSync(input, "utf8"));
+  const outputs = [];
+
+  if (!flags.has("--html-only")) {
+    const xmind = `${base}.xmind`;
+    writeXmind(tree, xmind);
+    outputs.push(xmind);
+  }
+  if (!flags.has("--xmind-only")) {
+    const html = `${base}-思维导图.html`;
+    writeHtml(tree, html);
+    outputs.push(html);
+  }
+
+  console.log(`${tree.title}`);
+  if (tree.subtitle) console.log(tree.subtitle);
+  console.log(`${countNodes(tree) - 1} nodes · ${tree.children.length} branches`);
+  for (const out of outputs) console.log(out);
 }
 
 if (require.main === module) {
@@ -377,3 +624,5 @@ if (require.main === module) {
     process.exit(1);
   }
 }
+
+module.exports = { parse, toMarkdown };
