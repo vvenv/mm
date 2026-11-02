@@ -3,6 +3,12 @@
 export const STORAGE_KEY = "mm.wenfu.dev/v1";
 export const DOUBLE_TAP_MS = 350;
 
+export const DOWNLOAD_FORMATS = [
+  { id: "markdown", label: "Markdown", ext: ".md", mime: "text/markdown;charset=utf-8", available: true },
+  { id: "xmind", label: "XMind", ext: ".xmind", mime: "application/vnd.xmind.workbook", available: false },
+  { id: "html", label: "交互 HTML", ext: ".html", mime: "text/html;charset=utf-8", available: false },
+];
+
 export function indentWidth(prefix) {
   let width = 0;
   for (const ch of prefix) width += ch === "\t" ? 2 : 1;
@@ -75,6 +81,37 @@ export function cloneData(node) {
 
 export function pageTitleOf(node) {
   return node.subtitle ? `${node.title} · ${node.subtitle}` : node.title;
+}
+
+export function countNodes(node) {
+  return 1 + (node.children || []).reduce((sum, child) => sum + countNodes(child), 0);
+}
+
+/** Importing replaces the in-memory map; confirm when there is anything to lose. */
+export function shouldConfirmOverwrite(tree) {
+  return !!(tree && Array.isArray(tree.children) && (tree.children.length > 0 || tree.title));
+}
+
+export function normalizeDownloadName(name, ext = ".md") {
+  const raw = String(name || "mindmap").trim() || "mindmap";
+  const base = raw.replace(/\.(md|markdown|txt|html|xmind)$/i, "");
+  const safe = base.replace(/[\\/:*?"<>|]+/g, "-").trim() || "mindmap";
+  return safe + ext;
+}
+
+export function buildDownload(tree, formatId = "markdown", name) {
+  const format = DOWNLOAD_FORMATS.find((item) => item.id === formatId);
+  if (!format || !format.available) {
+    throw new Error(format ? `${format.label} 即将支持` : "未知格式");
+  }
+  if (format.id === "markdown") {
+    return {
+      filename: normalizeDownloadName(name || tree.title, format.ext),
+      mime: format.mime,
+      content: toMarkdown(tree),
+    };
+  }
+  throw new Error(`${format.label} 即将支持`);
 }
 
 /**

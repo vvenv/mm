@@ -12,7 +12,7 @@
   svg.dragging { cursor: grabbing; }
   .toolbar {
     position: fixed; top: 12px; left: 14px; z-index: 2;
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    display: flex; gap: 8px; align-items: center;
   }
   .brand {
     margin: 0 6px 0 0;
@@ -21,14 +21,15 @@
     color: #111;
     user-select: none;
   }
-  .toolbar button {
+  .toolbar button, .node-actions button, .modal button, .modal-actions button {
     margin: 0; padding: 7px 12px;
     border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
     font: 13px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
     cursor: pointer;
   }
-  .toolbar button:hover:not(:disabled) { border-color: #999; }
-  .toolbar button:disabled { opacity: 0.35; cursor: default; }
+  .toolbar button:hover, .node-actions button:hover:not(:disabled), .modal button:hover:not(:disabled) {
+    border-color: #999;
+  }
   .toolbar input[type="file"] { display: none; }
   .hint {
     position: fixed; top: 14px; right: 18px; margin: 0; max-width: 42vw; text-align: right;
@@ -40,7 +41,7 @@
     margin: 0; padding: 8px 14px; border-radius: 6px;
     background: #111; color: #fff;
     font: 13px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 5;
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 6;
   }
   .toast.show { opacity: 1; }
   .drop {
@@ -59,25 +60,64 @@
     background: #fff; color: #111;
     font: inherit;
   }
-  .menu {
-    position: fixed; z-index: 5; display: none; min-width: 148px;
-    margin: 0; padding: 4px; border: 1px solid #ccc; border-radius: 8px;
-    background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  .node-actions {
+    position: fixed; z-index: 4; display: none; gap: 6px; align-items: center;
+    padding: 4px; border: 1px solid #ddd; border-radius: 8px; background: #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,.08);
   }
-  .menu button {
-    display: block; width: 100%; margin: 0; padding: 8px 12px;
-    border: 0; border-radius: 5px; background: transparent; color: #111;
-    font: 13px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
-    text-align: left; cursor: pointer;
+  .node-actions.show { display: flex; }
+  .node-actions button { padding: 6px 10px; white-space: nowrap; }
+  .node-actions button:disabled { opacity: 0.35; cursor: default; }
+  .node-actions button.danger { color: #b00020; }
+  .node-actions .count {
+    margin: 0 2px 0 4px;
+    font: 12px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #888; white-space: nowrap;
   }
-  .menu button:hover { background: #f3f3f3; }
-  .menu button.danger { color: #b00020; }
-  .menu button:disabled { opacity: 0.35; cursor: default; }
-  .menu button:disabled:hover { background: transparent; }
-  .menu .sep { height: 1px; margin: 4px 6px; background: #eee; }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 5;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.72);
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    width: min(420px, calc(100vw - 32px));
+    padding: 20px 20px 16px;
+    border: 1px solid #ddd; border-radius: 12px; background: #fff;
+    box-shadow: 0 16px 40px rgba(0,0,0,.1);
+  }
+  .modal h2 {
+    margin: 0 0 8px;
+    font: 700 18px/1.3 "Songti SC", "STSongti-SC-Regular", serif;
+  }
+  .modal p {
+    margin: 0 0 16px;
+    font: 14px/1.5 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #333;
+  }
+  .modal label {
+    display: block; margin: 0 0 6px;
+    font: 13px/1.3 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #555;
+  }
+  .modal input[type="text"], .modal select {
+    width: 100%; box-sizing: border-box;
+    margin: 0 0 14px; padding: 9px 10px;
+    border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+    font: 14px/1.3 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  .modal select:disabled, .modal option:disabled { color: #999; }
+  .modal-actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;
+  }
+  .modal-actions .primary {
+    border-color: #111; background: #111; color: #fff;
+  }
+  .modal-actions .primary:hover { border-color: #000; background: #222; }
   @media (max-width: 860px) {
     .hint { display: none; }
     .brand { display: none; }
+    .node-actions { max-width: calc(100vw - 24px); flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -86,32 +126,56 @@
   <span class="brand">mm</span>
   <button type="button" id="uploadBtn">上传</button>
   <button type="button" id="downloadBtn">下载</button>
-  <button type="button" id="editBtn" disabled>重命名</button>
-  <button type="button" id="addChildBtn" disabled>子节点</button>
-  <button type="button" id="addSiblingBtn" disabled>同级</button>
-  <button type="button" id="deleteBtn" disabled>删除</button>
   <input id="fileInput" type="file" accept=".md,.markdown,text/markdown,text/plain">
 </div>
 <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
-<p class="hint">双击行内编辑 · Tab 子节点 · Enter 同级 · 自动保存到本机</p>
-<div class="drop">松开以导入 Markdown</div>
-<div class="menu" id="menu" role="menu">
+<p class="hint">双击行内编辑 · 选中后就近操作 · 拖入 Markdown 可导入</p>
+<div class="drop" id="dropHint">松开以导入 Markdown</div>
+<div class="node-actions" id="nodeActions">
   <button type="button" data-act="rename">重命名</button>
-  <button type="button" data-act="child">添加子节点</button>
-  <button type="button" data-act="sibling">添加同级</button>
-  <div class="sep"></div>
+  <button type="button" data-act="child">子节点</button>
+  <button type="button" data-act="sibling">同级</button>
   <button type="button" class="danger" data-act="delete">删除</button>
+  <span class="count" id="nodeCount"></span>
+</div>
+<div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal">
+    <h2 id="confirmTitle">覆盖当前导图？</h2>
+    <p id="confirmText">导入将替换当前内容，且不可撤销。</p>
+    <div class="modal-actions">
+      <button type="button" id="confirmCancel">取消</button>
+      <button type="button" class="primary" id="confirmOk">覆盖导入</button>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop" id="downloadModal" role="dialog" aria-modal="true" aria-labelledby="downloadTitle">
+  <div class="modal">
+    <h2 id="downloadTitle">下载</h2>
+    <label for="downloadName">文件名</label>
+    <input id="downloadName" type="text" autocomplete="off" spellcheck="false">
+    <label for="downloadFormat">格式</label>
+    <select id="downloadFormat"></select>
+    <div class="modal-actions">
+      <button type="button" id="downloadCancel">取消</button>
+      <button type="button" class="primary" id="downloadOk">下载</button>
+    </div>
+  </div>
 </div>
 <p class="toast" id="toast" role="status"></p>
 <script type="module">
 import {
+  DOWNLOAD_FORMATS,
+  buildDownload,
   cloneData,
+  countNodes,
   createLocalStore,
+  normalizeDownloadName,
   pageTitleOf,
   parseMarkdown,
   recognizeNodeTap,
+  shouldConfirmOverwrite,
   toMarkdown,
-} from "./mm-core.js";
+} from "./mm-core.js?v=20261102b";
 
 const store = createLocalStore();
 const DEMO = {
@@ -124,7 +188,7 @@ const DEMO = {
       open: true,
       children: [
         { title: "# 标题 → 中心", children: [] },
-        { title: "嵌套列表 → 分支", children: [] },
+        { title: "拖放导入前会确认覆盖", children: [] },
       ],
     },
     {
@@ -132,11 +196,11 @@ const DEMO = {
       open: true,
       children: [
         { title: "双击行内编辑", children: [] },
-        { title: "Tab 添加子节点", children: [] },
-        { title: "Enter 添加同级", children: [] },
+        { title: "选中后就近操作", children: [] },
+        { title: "Tab / Enter 快捷键", children: [] },
       ],
     },
-    { title: "自动保存到本机", children: [] },
+    { title: "下载可选文件名与格式", children: [] },
   ],
 };
 
@@ -147,17 +211,20 @@ let editing = false;
 let editInput = null;
 let ignoreBlur = false;
 let lastTap = { node: null, time: 0 };
+let pendingImportFile = null;
 
 const NS = "http://www.w3.org/2000/svg";
 const svg = document.getElementById("map");
 const viewport = document.createElementNS(NS, "g");
 const toastEl = document.getElementById("toast");
 const fileInput = document.getElementById("fileInput");
-const menu = document.getElementById("menu");
-const editBtn = document.getElementById("editBtn");
-const addChildBtn = document.getElementById("addChildBtn");
-const addSiblingBtn = document.getElementById("addSiblingBtn");
-const deleteBtn = document.getElementById("deleteBtn");
+const nodeActions = document.getElementById("nodeActions");
+const nodeCount = document.getElementById("nodeCount");
+const confirmModal = document.getElementById("confirmModal");
+const confirmText = document.getElementById("confirmText");
+const downloadModal = document.getElementById("downloadModal");
+const downloadName = document.getElementById("downloadName");
+const downloadFormat = document.getElementById("downloadFormat");
 svg.appendChild(viewport);
 
 const GAP_X = 56;
@@ -171,6 +238,15 @@ const styles = [
   { size: 15, weight: 500, family: sans, fill: "#111", h: 30 },
   { size: 14, weight: 400, family: sans, fill: "#333", h: 28 },
 ];
+
+DOWNLOAD_FORMATS.forEach((format) => {
+  const option = document.createElement("option");
+  option.value = format.id;
+  option.textContent = format.available ? format.label : `${format.label}（即将支持）`;
+  option.disabled = !format.available;
+  if (format.available) option.selected = true;
+  downloadFormat.appendChild(option);
+});
 
 function toast(message) {
   toastEl.textContent = message;
@@ -210,20 +286,25 @@ function locate(target, node = tree, parent = null, index = -1) {
 }
 
 function updateChrome() {
-  const has = !!selected;
+  const has = !!selected && !editing;
   const isRoot = selected === tree;
-  editBtn.disabled = !has || editing;
-  addChildBtn.disabled = !has || editing;
-  addSiblingBtn.disabled = !has || isRoot || editing;
-  deleteBtn.disabled = !has || isRoot || editing;
-  menu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
-  menu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
+  nodeActions.querySelector('[data-act="rename"]').disabled = !has;
+  nodeActions.querySelector('[data-act="child"]').disabled = !has;
+  nodeActions.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
+  nodeActions.querySelector('[data-act="delete"]').disabled = !has || isRoot;
+  if (selected) {
+    const total = countNodes(selected);
+    const kids = selected.children.length;
+    nodeCount.textContent = kids ? `${kids} 支 · ${total} 点` : "叶子";
+  } else {
+    nodeCount.textContent = "";
+  }
+  positionNodeActions();
 }
 
 function selectNode(node) {
   if (editing) commitEdit(true);
   selected = node || null;
-  hideMenu();
   updateChrome();
   draw();
 }
@@ -276,6 +357,32 @@ function place(node, x, top) {
 let tx = 48;
 let ty = 36;
 let scale = 1;
+
+function screenPoint(x, y) {
+  return { x: tx + x * scale, y: ty + y * scale };
+}
+
+function positionNodeActions() {
+  if (!selected || editing || selected.x == null || drag?.moved) {
+    nodeActions.classList.remove("show");
+    return;
+  }
+  const anchorX = selected.x + Math.max(selected.labelW, 48) + 24;
+  const anchorY = selected.y + selected.h / 2;
+  const pt = screenPoint(anchorX, anchorY);
+  nodeActions.classList.add("show");
+  const pad = 8;
+  const width = nodeActions.offsetWidth || 280;
+  const height = nodeActions.offsetHeight || 40;
+  let left = pt.x;
+  let top = pt.y - height / 2;
+  if (left + width > window.innerWidth - pad) left = Math.max(pad, pt.x - width - 24 * scale);
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  if (top + height > window.innerHeight - pad) top = window.innerHeight - height - pad;
+  nodeActions.style.left = `${left}px`;
+  nodeActions.style.top = `${top}px`;
+}
 
 function draw() {
   const activeValue = editing && editInput ? editInput.value : null;
@@ -453,27 +560,18 @@ function draw() {
         event.stopPropagation();
         armDrag(event, node, "select");
       });
-      // Native dblclick is unreliable: the first click redraws SVG and replaces
-      // this element, so the browser never synthesizes dblclick. Editing is
-      // handled by recognizeNodeTap() in endDrag instead.
-      group.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        selected = node;
-        updateChrome();
-        draw();
-        showMenu(event.clientX, event.clientY);
-      });
     }
     nodes.appendChild(group);
   }
 
   visit(tree);
   apply();
+  updateChrome();
 }
 
 function apply() {
   viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + scale + ")");
+  positionNodeActions();
 }
 
 function relayout(anchor) {
@@ -487,13 +585,11 @@ function relayout(anchor) {
 let drag = null;
 function armDrag(event, node, mode) {
   if (editing) return;
-  hideMenu();
   drag = { x: event.clientX, y: event.clientY, tx, ty, moved: false, node, mode };
   svg.setPointerCapture(event.pointerId);
 }
 svg.addEventListener("pointerdown", (event) => {
   if (editing) return;
-  hideMenu();
   armDrag(event, null, "pan");
 });
 svg.addEventListener("pointermove", (event) => {
@@ -503,6 +599,7 @@ svg.addEventListener("pointermove", (event) => {
   if (!drag.moved && Math.hypot(dx, dy) < 5) return;
   drag.moved = true;
   svg.classList.add("dragging");
+  nodeActions.classList.remove("show");
   tx = drag.tx + dx;
   ty = drag.ty + dy;
   apply();
@@ -513,7 +610,6 @@ function endDrag() {
       lastTap = { node: null, time: 0 };
       drag.node.open = !drag.node.open;
       selected = drag.node;
-      updateChrome();
       relayout(drag.node);
       saveLocal();
     } else if (drag.mode === "select") {
@@ -523,15 +619,15 @@ function endDrag() {
         beginEdit(drag.node);
       } else {
         selected = drag.node;
-        updateChrome();
         draw();
       }
     }
   } else if (drag && !drag.moved && !drag.node) {
     lastTap = { node: null, time: 0 };
     selected = null;
-    updateChrome();
     draw();
+  } else if (drag && drag.moved) {
+    positionNodeActions();
   }
   drag = null;
   svg.classList.remove("dragging");
@@ -589,7 +685,6 @@ function frame() {
 
 function beginEdit(node) {
   if (!node) return;
-  hideMenu();
   if (editing && selected === node) {
     editInput && editInput.focus();
     return;
@@ -598,7 +693,6 @@ function beginEdit(node) {
   selected = node;
   editing = true;
   editInput = null;
-  updateChrome();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -618,7 +712,6 @@ function commitEdit(save) {
       svg.setAttribute("aria-label", pageTitleOf(tree));
     }
   }
-  updateChrome();
   relayout(node);
   saveLocal();
   requestAnimationFrame(() => { ignoreBlur = false; });
@@ -634,7 +727,6 @@ function addChild(parent) {
   selected = child;
   editing = true;
   editInput = null;
-  updateChrome();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -651,7 +743,6 @@ function addSibling(node) {
   selected = sibling;
   editing = true;
   editInput = null;
-  updateChrome();
   layout(tree);
   place(tree, 0, 0);
   draw();
@@ -669,58 +760,42 @@ function deleteNode(node) {
   parent.children.splice(info.index, 1);
   refreshDepth(tree, 0);
   selected = parent;
-  updateChrome();
   relayout(parent);
   saveLocal();
 }
 
-function showMenu(x, y) {
-  menu.style.display = "block";
-  const pad = 8;
-  const rect = menu.getBoundingClientRect();
-  const left = Math.min(x, window.innerWidth - rect.width - pad);
-  const top = Math.min(y, window.innerHeight - rect.height - pad);
-  menu.style.left = Math.max(pad, left) + "px";
-  menu.style.top = Math.max(pad, top) + "px";
-}
-
-function hideMenu() {
-  menu.style.display = "none";
-}
-
-function armToolbar(btn, action) {
+function armAction(btn, action) {
   btn.addEventListener("pointerdown", (event) => {
     event.preventDefault();
+    event.stopPropagation();
     ignoreBlur = true;
   });
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", (event) => {
+    event.stopPropagation();
     action();
     requestAnimationFrame(() => { ignoreBlur = false; });
   });
 }
 
-menu.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-  ignoreBlur = true;
-});
-menu.addEventListener("click", (event) => {
-  const btn = event.target.closest("button[data-act]");
-  if (!btn || btn.disabled) return;
+nodeActions.querySelectorAll("button[data-act]").forEach((btn) => {
   const act = btn.getAttribute("data-act");
-  hideMenu();
-  if (act === "rename") beginEdit(selected);
-  if (act === "child") addChild(selected);
-  if (act === "sibling") addSibling(selected);
-  if (act === "delete") deleteNode(selected);
-  requestAnimationFrame(() => { ignoreBlur = false; });
+  armAction(btn, () => {
+    if (act === "rename") beginEdit(selected);
+    if (act === "child") addChild(selected);
+    if (act === "sibling") addSibling(selected);
+    if (act === "delete") deleteNode(selected);
+  });
 });
-
-armToolbar(editBtn, () => beginEdit(selected));
-armToolbar(addChildBtn, () => addChild(selected));
-armToolbar(addSiblingBtn, () => addSibling(selected));
-armToolbar(deleteBtn, () => deleteNode(selected));
 
 window.addEventListener("keydown", (event) => {
+  if (confirmModal.classList.contains("show") || downloadModal.classList.contains("show")) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeConfirm(false);
+      closeDownload();
+    }
+    return;
+  }
   if (editing) return;
   const tag = event.target && event.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable) return;
@@ -740,7 +815,6 @@ window.addEventListener("keydown", (event) => {
     deleteNode(selected);
   } else if (event.key === "Escape") {
     selected = null;
-    updateChrome();
     draw();
   }
 });
@@ -757,13 +831,24 @@ function loadTree(next, name, keepOpen) {
   const title = pageTitleOf(tree);
   document.title = title + " · mm";
   svg.setAttribute("aria-label", title);
-  updateChrome();
   frame();
   saveLocal();
 }
 
-async function importFile(file) {
-  if (!file) return;
+function openConfirm(file) {
+  pendingImportFile = file;
+  confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图，且不可撤销。`;
+  confirmModal.classList.add("show");
+}
+
+function closeConfirm(confirmed) {
+  confirmModal.classList.remove("show");
+  const file = pendingImportFile;
+  pendingImportFile = null;
+  if (confirmed && file) doImport(file);
+}
+
+async function doImport(file) {
   try {
     const text = await file.text();
     loadTree(parseMarkdown(text), file.name || "outline.md", false);
@@ -773,24 +858,64 @@ async function importFile(file) {
   }
 }
 
-function downloadMarkdown() {
+async function requestImport(file) {
+  if (!file) return;
+  if (!/\.(md|markdown|txt)$/i.test(file.name || "") && file.type && !/^text\//.test(file.type)) {
+    toast("请选择 Markdown 文本文件");
+    return;
+  }
+  if (shouldConfirmOverwrite(tree)) openConfirm(file);
+  else doImport(file);
+}
+
+function openDownload() {
   if (editing) commitEdit(true);
-  const blob = new Blob([toMarkdown(tree)], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName || ((tree.title || "mindmap") + ".md");
-  a.click();
-  URL.revokeObjectURL(url);
-  toast("已下载 " + (fileName || "mindmap.md"));
+  downloadName.value = (fileName || tree.title || "mindmap").replace(/\.(md|markdown|txt|html|xmind)$/i, "");
+  downloadFormat.value = "markdown";
+  downloadModal.classList.add("show");
+  downloadName.focus();
+  downloadName.select();
+}
+
+function closeDownload() {
+  downloadModal.classList.remove("show");
+}
+
+function confirmDownload() {
+  try {
+    const packed = buildDownload(tree, downloadFormat.value, downloadName.value);
+    const blob = new Blob([packed.content], { type: packed.mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = packed.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    fileName = packed.filename;
+    saveLocal();
+    closeDownload();
+    toast("已下载 " + packed.filename);
+  } catch (error) {
+    toast(error.message || String(error));
+  }
 }
 
 document.getElementById("uploadBtn").addEventListener("click", () => fileInput.click());
-document.getElementById("downloadBtn").addEventListener("click", downloadMarkdown);
+document.getElementById("downloadBtn").addEventListener("click", openDownload);
+document.getElementById("confirmCancel").addEventListener("click", () => closeConfirm(false));
+document.getElementById("confirmOk").addEventListener("click", () => closeConfirm(true));
+document.getElementById("downloadCancel").addEventListener("click", closeDownload);
+document.getElementById("downloadOk").addEventListener("click", confirmDownload);
+downloadName.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    confirmDownload();
+  }
+});
 fileInput.addEventListener("change", () => {
   const file = fileInput.files && fileInput.files[0];
   fileInput.value = "";
-  importFile(file);
+  requestImport(file);
 });
 
 let dragDepth = 0;
@@ -810,16 +935,14 @@ window.addEventListener("drop", (event) => {
   dragDepth = 0;
   document.body.classList.remove("dragging-file");
   const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
-  if (!file) return;
-  if (!/\.(md|markdown|txt)$/i.test(file.name) && file.type && !/^text\//.test(file.type)) {
-    toast("请拖入 Markdown 文本文件");
-    return;
-  }
-  importFile(file);
+  requestImport(file);
 });
 
-window.addEventListener("click", (event) => {
-  if (!menu.contains(event.target)) hideMenu();
+confirmModal.addEventListener("click", (event) => {
+  if (event.target === confirmModal) closeConfirm(false);
+});
+downloadModal.addEventListener("click", (event) => {
+  if (event.target === downloadModal) closeDownload();
 });
 
 const cached = store.load();
@@ -833,14 +956,17 @@ if (cached) {
   tree = cloneData(DEMO);
   prepare(tree, true);
 }
-updateChrome();
 frame();
 window.addEventListener("resize", () => {
   if (!editing) frame();
+  else positionNodeActions();
 });
 
 window.__mm = {
   recognizeNodeTap,
+  shouldConfirmOverwrite,
+  normalizeDownloadName,
+  buildDownload,
   getTree: () => tree,
   getSelected: () => selected,
   isEditing: () => editing,
@@ -850,7 +976,6 @@ window.__mm = {
     const first = recognizeNodeTap(null, target, Date.now());
     lastTap = first.next;
     selected = target;
-    updateChrome();
     draw();
     const second = recognizeNodeTap(lastTap, target, Date.now());
     lastTap = second.next;

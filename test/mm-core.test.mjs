@@ -5,10 +5,14 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   DOUBLE_TAP_MS,
+  buildDownload,
   cloneData,
+  countNodes,
   createLocalStore,
+  normalizeDownloadName,
   parseMarkdown,
   recognizeNodeTap,
+  shouldConfirmOverwrite,
   toMarkdown,
 } from "../public/mm-core.js";
 
@@ -111,8 +115,32 @@ test("createLocalStore persists and restores tree", () => {
 test("index.html wires recognizeNodeTap and does not rely on native dblclick", () => {
   const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
   assert.match(html, /recognizeNodeTap/);
-  assert.match(html, /from "\.\/mm-core\.js"/);
+  assert.match(html, /from "\.\/mm-core\.js(?:\?[^"]*)?"/);
   assert.equal(/addEventListener\(\s*["']dblclick["']/.test(html), false);
+  assert.match(html, /node-actions/);
+  assert.match(html, /confirmModal/);
+  assert.match(html, /downloadModal/);
+});
+
+test("shouldConfirmOverwrite when the current map has content", () => {
+  assert.equal(shouldConfirmOverwrite({ title: "A", children: [] }), true);
+  assert.equal(shouldConfirmOverwrite({ title: "", children: [{ title: "x", children: [] }] }), true);
+  assert.equal(shouldConfirmOverwrite(null), false);
+});
+
+test("normalizeDownloadName and buildDownload for markdown", () => {
+  assert.equal(normalizeDownloadName("demo.markdown"), "demo.md");
+  assert.equal(normalizeDownloadName("a/b:c", ".md"), "a-b-c.md");
+  const tree = parseMarkdown("# Hello\n\n- a\n");
+  const packed = buildDownload(tree, "markdown", "hello");
+  assert.equal(packed.filename, "hello.md");
+  assert.match(packed.content, /^# Hello/m);
+  assert.throws(() => buildDownload(tree, "xmind"), /即将支持/);
+});
+
+test("countNodes includes the node itself", () => {
+  const tree = parseMarkdown("# R\n\n- a\n  - b\n- c\n");
+  assert.equal(countNodes(tree), 4);
 });
 
 test("selection redraw invalidates native dblclick targets", () => {
