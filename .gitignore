@@ -1,4 +1,16 @@
+# OS
 .DS_Store
-.env.production
-*.xmind
-*-思维导图.html
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!scripts/env.production.example
+
+# Dependencies
+node_modules/
+
+# Logs / caches
+*.log
+.pnpm-store/
+.cache/

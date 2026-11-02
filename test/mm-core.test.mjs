@@ -170,12 +170,21 @@ test("createRecentIconsStore keeps newest-first unique list", () => {
   assert.deepEqual(store.push("⬇️"), ["⬇️", "📤", "🚀"]);
   assert.ok(EMOJI_CATEGORIES.length >= 3);
   assert.ok(EMOJI_CATEGORIES.every((c) => c.id && c.label && c.emojis.length));
+  assert.ok(EMOJI_CATEGORIES.some((c) => c.id === "flags"));
+  const all = EMOJI_CATEGORIES.flatMap((c) => c.emojis);
+  assert.ok(new Set(all).size >= 1500);
+  assert.ok(all.includes("💩"));
+  assert.ok(all.includes("👑"));
 });
 
 test("searchEmojis matches names and category labels", () => {
   assert.ok(searchEmojis("苹果").includes("🍎"));
   assert.ok(searchEmojis("apple").includes("🍎"));
   assert.ok(searchEmojis("食物").includes("🍜"));
+  assert.ok(searchEmojis("便便").includes("💩"));
+  assert.ok(searchEmojis("poop").includes("💩"));
+  assert.ok(searchEmojis("王冠").includes("👑"));
+  assert.ok(searchEmojis("crown").includes("👑"));
   assert.deepEqual(searchEmojis("   "), []);
   assert.equal(searchEmojis("zzznomatch").length, 0);
 });
@@ -185,7 +194,7 @@ test("searchEmojis heart terms hit hearts, not whole symbols category", () => {
   assert.ok(hearts.includes("❤️"));
   assert.ok(hearts.includes("💕"));
   assert.ok(!hearts.includes("❌"), "must not dump unrelated symbols");
-  assert.ok(hearts.length < 40, `expected heart subset, got ${hearts.length}`);
+  assert.ok(hearts.length < 80, `expected heart subset, got ${hearts.length}`);
 
   const zh = searchEmojis("心");
   assert.ok(zh.includes("❤️"));

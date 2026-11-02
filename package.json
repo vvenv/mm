@@ -4,6 +4,10 @@
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "deploy": "bash scripts/deploy.sh",
+    "emoji:gen": "node scripts/generate-emoji-data.mjs",
     "test": "node --test test/**/*.test.mjs"
+  },
+  "devDependencies": {
+    "emojibase-data": "^18.0.0"
   }
 }
