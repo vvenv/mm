@@ -1,6 +1,16 @@
 {
   "name": "mm",
   "private": true,
+  "description": "把 Markdown 大纲转成可交互思维导图。本地优先、可离线、纯静态托管。",
+  "license": "MIT",
+  "homepage": "https://mm.wenfu.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vvenv/mm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vvenv/mm/issues"
+  },
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "deploy": "bash scripts/deploy.sh",
