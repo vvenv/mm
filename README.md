@@ -37,7 +37,7 @@
 - **长链**：`https://mm.wenfu.dev/#v1=…`，载荷在 URL hash 里（deflate 压缩）；hash 不进 nginx 访问日志
 - **短链（优先）**：`https://s.wenfu.dev/<id>` → 302 到 `mm.wenfu.dev/?s=<id>`，再由前端拉取载荷；服务端实现见独立仓库 [vvenv/short](https://github.com/vvenv/short)
 - **短链（备选）**：第一方不可用且长链不太长时，再试 is.gd / v.gd
-- 对方打开后为只读，不写入其 `localStorage`；工具栏只读/编辑切换会禁用，需点「保存副本」后才会存到本机并可编辑
+- 对方打开后为只读，不写入其 `localStorage`；工具栏隐藏只读/编辑切换，需点「保存副本」后才会存到本机并可切换模式
 
 隐私：长链内容在 URL 里；第一方短链的压缩载荷存在 `s.wenfu.dev` 服务器磁盘；外部短链提供商会看到完整目标 URL。
 

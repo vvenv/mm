@@ -1166,7 +1166,7 @@
               <path d="m10 12 4 4" />
               <path d="m14 12-4 4" />
             </svg>
-            <span>关闭文档</span>
+            <span>回到欢迎页</span>
           </button>
         </div>
       </div>
@@ -1724,8 +1724,8 @@
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
               {
-                title: "菜单可关闭文档",
-                desc: "清除本地自动保存并回到欢迎页",
+                title: "菜单可回到欢迎页",
+                desc: "清除本地自动保存并重置为示例导图",
                 children: [],
               },
               {
@@ -2057,23 +2057,26 @@
 
       function syncModeSwitch() {
         document.body.dataset.mode = appMode;
+        modeSwitch.hidden = shareGuest;
+        const modeSep = modeSwitch.previousElementSibling;
+        if (modeSep && modeSep.classList.contains("sep")) {
+          modeSep.hidden = shareGuest;
+        }
         modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
           const on = btn.getAttribute("data-mode") === appMode;
           btn.setAttribute("aria-checked", on ? "true" : "false");
           btn.tabIndex = shareGuest ? -1 : on ? 0 : -1;
-          btn.disabled = shareGuest;
+          btn.disabled = false;
         });
-        modeSwitch.title = shareGuest
-          ? "分享只读中，请先保存副本"
-          : "切换只读 / 编辑";
+        modeSwitch.title = "切换只读 / 编辑";
         uploadBtn.disabled = !canEdit();
         uploadBtn.title = canEdit()
           ? "导入 Markdown / OPML / JSON / HTML / XMind"
           : "只读模式下不能导入";
         closeDocBtn.disabled = !canEdit();
         closeDocBtn.title = canEdit()
-          ? "关闭文档"
-          : "只读模式下不能关闭文档";
+          ? "清除本地保存并回到欢迎页"
+          : "只读模式下不能回到欢迎页";
       }
 
       function setAppMode(mode) {
@@ -4134,10 +4137,10 @@
 
       function openCloseConfirm() {
         pendingConfirm = { type: "close" };
-        confirmTitle.textContent = "关闭当前文档？";
+        confirmTitle.textContent = "回到欢迎页？";
         confirmText.textContent =
-          "将清除本地自动保存并回到欢迎页，此操作不可撤销。";
-        confirmOk.textContent = "关闭文档";
+          "将清除本地自动保存并重置为示例导图，此操作不可撤销。";
+        confirmOk.textContent = "回到欢迎页";
         confirmModal.classList.add("show");
       }
 
@@ -4161,12 +4164,12 @@
         history.clear();
         store.clear();
         updateHistoryChrome();
-        toast("已关闭文档");
+        toast("已回到欢迎页");
       }
 
       function requestCloseDocument() {
         if (!canEdit()) {
-          toast("只读模式下不能关闭文档");
+          toast("只读模式下不能回到欢迎页");
           return;
         }
         if (editing) commitEdit(true);
@@ -4505,7 +4508,6 @@
         appMode = "view";
         writeAppMode(appMode);
         syncShareBanner();
-        toast("只读分享 · 可保存副本");
       }
 
       const shareHashRaw = String(location.hash || "").replace(/^#/, "");
