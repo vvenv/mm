@@ -894,14 +894,16 @@ const OUTLINE_INDENTED_RE = /^[\t ]+\S/;
 
 /**
  * Detect clipboard text that should expand into a subtree instead of a flat string.
- * Multi-line Markdown lists / headings, or plain indented outlines.
+ * Multi-line Markdown lists / headings, plain indented outlines, or a single list item
+ * (node copy of a leaf).
  */
 export function looksLikeOutlinePaste(text) {
   const lines = String(text || "")
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+$/, ""))
     .filter((line) => line.trim());
-  if (lines.length < 2) return false;
+  if (!lines.length) return false;
+  if (lines.length === 1) return OUTLINE_LIST_RE.test(lines[0]);
 
   let list = 0;
   let heading = 0;
@@ -917,6 +919,26 @@ export function looksLikeOutlinePaste(text) {
   if (heading >= 1 && (list >= 1 || indented >= 1 || heading >= 2)) return true;
   if (indented >= 1 && lines.length >= 2) return true;
   return false;
+}
+
+/**
+ * Serialize a node (and its descendants) as a Markdown list fragment for clipboard copy.
+ * Unlike toMarkdown(), the node itself is a list item — suitable for pasteOutline.
+ */
+export function subtreeToOutline(node) {
+  if (!node) return "";
+  const lines = [];
+  function walk(item, depth) {
+    const pad = "  ".repeat(depth);
+    lines.push(`${pad}- ${formatListLabel(item)}`);
+    const nested = `${pad}  `;
+    if (item.desc) appendParagraphLines(lines, item.desc, nested);
+    if (item.note) appendNoteLines(lines, item.note, nested);
+    (item.children || []).forEach((child) => walk(child, depth + 1));
+  }
+  walk(node, 0);
+  lines.push("");
+  return lines.join("\n");
 }
 
 /** Turn plain indented lines into Markdown list items when no list/heading markers exist. */

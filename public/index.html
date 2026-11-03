@@ -1088,6 +1088,58 @@
         <span class="kbd">Enter</span>
       </button>
       <div class="sep"></div>
+      <button type="button" data-act="copy" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+        <span>复制</span>
+        <span class="kbd">⌘C</span>
+      </button>
+      <button type="button" data-act="cut" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M20 4 8.12 15.88" />
+          <path d="M14.47 14.48 20 20" />
+          <path d="M8.12 8.12 12 12" />
+        </svg>
+        <span>剪切</span>
+        <span class="kbd">⌘X</span>
+      </button>
+      <button type="button" data-act="paste" role="menuitem">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+        </svg>
+        <span>粘贴</span>
+        <span class="kbd">⌘V</span>
+      </button>
+      <div class="sep"></div>
       <button type="button" class="danger" data-act="delete" role="menuitem">
         <svg
           viewBox="0 0 24 24"
@@ -1201,6 +1253,7 @@
         parseMarkdown,
         looksLikeOutlinePaste,
         parseOutlinePaste,
+        subtreeToOutline,
         countNodes,
         pathToNode,
         readAppMode,
@@ -1213,10 +1266,12 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103b";
+      } from "./mm-core.js?v=20261103c";
 
       const store = createLocalStore();
       const history = createHistory();
+      /** Fallback when system clipboard is unavailable (context-menu paste). */
+      let nodeClipboardText = "";
       const recentIcons = createRecentIconsStore();
       const DEMO = {
         title: "Markdown Mindmap",
@@ -1832,6 +1887,9 @@
         ctxMenu.querySelector('[data-act="note"]').disabled = !has;
         ctxMenu.querySelector('[data-act="child"]').disabled = !has;
         ctxMenu.querySelector('[data-act="sibling"]').disabled = !has || isRoot;
+        ctxMenu.querySelector('[data-act="copy"]').disabled = !has;
+        ctxMenu.querySelector('[data-act="cut"]').disabled = !has || isRoot;
+        ctxMenu.querySelector('[data-act="paste"]').disabled = !has;
         ctxMenu.querySelector('[data-act="delete"]').disabled = !has || isRoot;
       }
 
@@ -3206,6 +3264,24 @@
         (node.children || []).forEach(markSubtreeOpen);
       }
 
+      function clipboardUiBlocked() {
+        return (
+          notePop.classList.contains("show") ||
+          iconPop.classList.contains("show") ||
+          confirmModal.classList.contains("show") ||
+          downloadModal.classList.contains("show")
+        );
+      }
+
+      function isTypingTarget(target) {
+        const tag = target && target.tagName;
+        return (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          !!(target && target.isContentEditable)
+        );
+      }
+
       /** Paste Markdown / indented outline under a node as a tree branch. */
       function pasteOutline(parent, text) {
         if (!parent || !canEdit()) return false;
@@ -3239,11 +3315,62 @@
         return true;
       }
 
-      function deleteNode(node) {
+      function writeNodeClipboard(node) {
+        if (!node) return "";
+        const text = subtreeToOutline(node);
+        nodeClipboardText = text;
+        return text;
+      }
+
+      async function copyNode(node, { silent = false } = {}) {
+        if (!node) return false;
+        const text = writeNodeClipboard(node);
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          }
+        } catch {
+          /* memory fallback kept in nodeClipboardText */
+        }
+        if (!silent) toast("已复制");
+        return true;
+      }
+
+      async function cutNode(node) {
+        if (!node || !canEdit()) return false;
+        if (node === tree) {
+          toast("不能剪切中心节点");
+          return false;
+        }
+        await copyNode(node, { silent: true });
+        deleteNode(node, { silent: true });
+        toast("已剪切");
+        return true;
+      }
+
+      async function pasteNode(parent) {
+        if (!parent || !canEdit()) return false;
+        let text = "";
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            text = await navigator.clipboard.readText();
+          }
+        } catch {
+          text = "";
+        }
+        if (!looksLikeOutlinePaste(text)) text = nodeClipboardText;
+        if (!looksLikeOutlinePaste(text)) {
+          toast("剪贴板没有可粘贴的节点");
+          return false;
+        }
+        return pasteOutline(parent, text);
+      }
+
+      function deleteNode(node, { silent = false } = {}) {
         if (!canEdit()) return;
         const info = locate(node);
         if (!info || !info.parent) {
-          toast("不能删除中心节点");
+          if (!silent) toast("不能删除中心节点");
           return;
         }
         if (editing) commitEdit(true);
@@ -3272,6 +3399,9 @@
         if (act === "note") openNote(selected, { edit: true });
         if (act === "child") addChild(selected);
         if (act === "sibling") addSibling(selected);
+        if (act === "copy") copyNode(selected);
+        if (act === "cut") cutNode(selected);
+        if (act === "paste") pasteNode(selected);
         if (act === "delete") deleteNode(selected);
         requestAnimationFrame(() => {
           ignoreBlur = false;
@@ -3301,22 +3431,36 @@
       undoBtn.addEventListener("click", undo);
       redoBtn.addEventListener("click", redo);
 
-      window.addEventListener("paste", (event) => {
+      window.addEventListener("copy", (event) => {
         if (!canEdit() || !selected || !tree) return;
-        if (
-          notePop.classList.contains("show") ||
-          iconPop.classList.contains("show") ||
-          confirmModal.classList.contains("show") ||
-          downloadModal.classList.contains("show")
-        ) {
+        if (clipboardUiBlocked()) return;
+        if (editing || isTypingTarget(event.target)) return;
+        event.preventDefault();
+        const text = writeNodeClipboard(selected);
+        event.clipboardData.setData("text/plain", text);
+        toast("已复制");
+      });
+
+      window.addEventListener("cut", (event) => {
+        if (!canEdit() || !selected || !tree) return;
+        if (clipboardUiBlocked()) return;
+        if (editing || isTypingTarget(event.target)) return;
+        if (selected === tree) {
+          event.preventDefault();
+          toast("不能剪切中心节点");
           return;
         }
-        const target = event.target;
-        const tag = target && target.tagName;
-        const inField =
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          (target && target.isContentEditable);
+        event.preventDefault();
+        const text = writeNodeClipboard(selected);
+        event.clipboardData.setData("text/plain", text);
+        deleteNode(selected, { silent: true });
+        toast("已剪切");
+      });
+
+      window.addEventListener("paste", (event) => {
+        if (!canEdit() || !selected || !tree) return;
+        if (clipboardUiBlocked()) return;
+        const inField = isTypingTarget(event.target);
         // Intercept outline paste on the canvas or while editing a node label;
         // leave other form fields alone.
         if (inField && !editing) return;
@@ -3325,6 +3469,7 @@
           : "";
         if (!looksLikeOutlinePaste(text)) return;
         event.preventDefault();
+        nodeClipboardText = text;
         pasteOutline(selected, text);
       });
 

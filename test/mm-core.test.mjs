@@ -29,6 +29,7 @@ import {
   parseMarkdown,
   looksLikeOutlinePaste,
   parseOutlinePaste,
+  subtreeToOutline,
   readAppMode,
   readFontId,
   readThemeId,
@@ -476,6 +477,7 @@ test("pathToNode / nodeAtPath round-trip", () => {
 test("looksLikeOutlinePaste detects nested lists and plain indents", () => {
   assert.equal(looksLikeOutlinePaste("单行"), false);
   assert.equal(looksLikeOutlinePaste("一行\n两行无结构"), false);
+  assert.equal(looksLikeOutlinePaste("- 叶子节点"), true);
   assert.equal(
     looksLikeOutlinePaste(`	- 领域
 		- Web
@@ -487,6 +489,31 @@ test("looksLikeOutlinePaste detects nested lists and plain indents", () => {
   阶段
     副驾驶`),
     true,
+  );
+});
+
+test("subtreeToOutline round-trips through parseOutlinePaste", () => {
+  const tree = parseMarkdown(`# Root
+- 🍎 领域
+  范围说明
+  > 备注一行
+  - Web
+    - 管理后台
+  - App
+`);
+  const branch = tree.children[0];
+  const outline = subtreeToOutline(branch);
+  assert.match(outline, /^- 🍎 领域/m);
+  assert.match(outline, /^\s+- Web/m);
+  const children = parseOutlinePaste(outline);
+  assert.equal(children.length, 1);
+  assert.equal(children[0].title, "领域");
+  assert.equal(children[0].icon, "🍎");
+  assert.equal(children[0].desc, "范围说明");
+  assert.equal(children[0].note, "备注一行");
+  assert.deepEqual(
+    children[0].children.map((c) => c.title),
+    ["Web", "App"],
   );
 });
 
