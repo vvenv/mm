@@ -386,8 +386,10 @@ test("index.html edits on single click and does not rely on native dblclick", ()
   assert.match(html, /data-act="desc"/);
   assert.match(html, /beginEdit\(selected, "desc"\)/);
   assert.match(html, /id="modeSwitch"/);
-  assert.match(html, /data-mode="view"/);
-  assert.match(html, /data-mode="edit"/);
+  assert.match(html, /class="mode-switch"/);
+  assert.match(html, /切换为只读/);
+  assert.match(html, /切换为编辑/);
+  assert.match(html, /aria-pressed/);
   assert.match(html, /id="fontSelect"/);
   assert.match(html, /id="themeSelect"/);
   assert.match(html, /FONT_PRESETS/);

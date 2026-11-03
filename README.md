@@ -18,7 +18,7 @@
 
 - **Markdown 即大纲**：`#` 标题作中心节点，列表作分支；缩进段落 → 副标题，`>` 引用 → 备注
 - **画布上直接改**：单击改标题 / 副标题，点前导 emoji 换图标，右键或长按打开菜单
-- **只读 / 编辑**：工具栏一键切换；编辑模式支持 Tab 子节点、Enter 同级、撤销重做
+- **只读 / 编辑**：左下角一键切换；编辑模式支持 Tab 子节点、Enter 同级、撤销重做
 - **导入导出**：拖放或工具栏导入 `.md`；导出 Markdown · XMind · 交互 HTML · OPML · JSON
 - **链接分享**：菜单「分享」生成 `#v1=…` 长链；优先经 [s.wenfu.dev](https://s.wenfu.dev/)（仓库 [vvenv/short](https://github.com/vvenv/short)）建短链，失败再试 is.gd / v.gd
 - **剪贴板**：复制 / 剪切 / 粘贴大纲文本，可把 Markdown 列表粘成树状分支
@@ -37,7 +37,7 @@
 - **长链**：`https://mm.wenfu.dev/#v1=…`，载荷在 URL hash 里（deflate 压缩）；hash 不进 nginx 访问日志
 - **短链（优先）**：`https://s.wenfu.dev/<id>` → 302 到 `mm.wenfu.dev/?s=<id>`，再由前端拉取载荷；服务端实现见独立仓库 [vvenv/short](https://github.com/vvenv/short)
 - **短链（备选）**：第一方不可用且长链不太长时，再试 is.gd / v.gd
-- 对方打开后为只读，不写入其 `localStorage`；工具栏隐藏只读/编辑切换，需点「保存副本」后才会存到本机并可切换模式
+- 对方打开后为只读，不写入其 `localStorage`；左下角的只读/编辑切换会隐藏，需点「保存副本」后才会存到本机并可切换模式
 
 隐私：长链内容在 URL 里；第一方短链的压缩载荷存在 `s.wenfu.dev` 服务器磁盘；外部短链提供商会看到完整目标 URL。
 
