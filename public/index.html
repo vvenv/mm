@@ -3453,6 +3453,8 @@
       }
 
       let drag = null;
+      // Hold Esc after cancelling a drag should not also clear the selection.
+      let escapeUsedForDrag = false;
       const activePointers = new Map();
       let pinch = null;
 
@@ -3704,6 +3706,19 @@
         svg.classList.remove("node-dragging");
         if (wasNodeDrag) draw();
       });
+
+      function cancelNodeDrag() {
+        if (!drag || drag.kind !== "node") return false;
+        clearLongPress();
+        // Leave pointer capture in place so the later pointerup cannot
+        // land on a toolbar control. endDrag sees drag === null and does
+        // not call moveNodeToDrop.
+        drag = null;
+        svg.classList.remove("dragging");
+        svg.classList.remove("node-dragging");
+        draw();
+        return true;
+      }
       svg.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         const node = nodeFromEventTarget(event.target);
@@ -4106,7 +4121,19 @@
         pasteOutline(selected, text);
       });
 
+      window.addEventListener("keyup", (event) => {
+        if (event.key === "Escape") escapeUsedForDrag = false;
+      });
+      window.addEventListener("blur", () => {
+        escapeUsedForDrag = false;
+      });
+
       window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && (escapeUsedForDrag || cancelNodeDrag())) {
+          escapeUsedForDrag = true;
+          event.preventDefault();
+          return;
+        }
         if (iconPop.classList.contains("show") && event.key === "Escape") {
           event.preventDefault();
           hideIconPop();

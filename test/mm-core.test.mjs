@@ -360,6 +360,22 @@ test("createLocalStore persists and restores tree", () => {
  * redraws SVG and replaces the node element. Editing starts via beginEdit
  * on a single pointerup (clickEdit / drag.mode select|desc).
  */
+test("Escape cancels an in-progress node drag without moving the node", () => {
+  const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+  assert.match(html, /function cancelNodeDrag\(\)/);
+  assert.match(html, /if \(!drag \|\| drag\.kind !== "node"\) return false/);
+  assert.match(
+    html,
+    /event\.key === "Escape" && \(escapeUsedForDrag \|\| cancelNodeDrag\(\)\)/,
+  );
+  const commit = html.indexOf("if (!moveNodeToDrop(node, drop))");
+  assert.ok(commit > 0);
+  assert.match(
+    html.slice(commit - 280, commit),
+    /if \(drag && drag\.moved && drag\.kind === "node"\)/,
+  );
+});
+
 test("index.html edits on single click and does not rely on native dblclick", () => {
   const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
   assert.match(html, /beginEdit\(/);
