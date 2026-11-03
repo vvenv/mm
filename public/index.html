@@ -1189,6 +1189,9 @@
         normalizeDownloadName,
         pageTitleOf,
         parseMarkdown,
+        looksLikeOutlinePaste,
+        parseOutlinePaste,
+        countNodes,
         pathToNode,
         readAppMode,
         normalizeFontId,
@@ -1200,7 +1203,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261102r";
+      } from "./mm-core.js?v=20261103a";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1241,6 +1244,11 @@
               { title: "点击前导 emoji 换图标", icon: "🎨", children: [] },
               { title: "右键或长按打开菜单", children: [] },
               { title: "Tab 子节点 · Enter 同级", children: [] },
+              {
+                title: "粘贴大纲 → 树状分支",
+                desc: "选中节点后粘贴 Markdown / 缩进文本",
+                children: [],
+              },
               { title: "工具栏切换只读 / 编辑", children: [] },
             ],
           },
@@ -2867,6 +2875,44 @@
         saveLocal();
       }
 
+      function markSubtreeOpen(node) {
+        node.open = true;
+        (node.children || []).forEach(markSubtreeOpen);
+      }
+
+      /** Paste Markdown / indented outline under a node as a tree branch. */
+      function pasteOutline(parent, text) {
+        if (!parent || !canEdit()) return false;
+        let children;
+        try {
+          children = parseOutlinePaste(text);
+        } catch (error) {
+          toast(error.message || String(error));
+          return false;
+        }
+        if (!children.length) return false;
+        if (editing) commitEdit(true);
+        hideCtxMenu();
+        hideNotePop({ save: false });
+        hideIconPop();
+        pushHistory();
+        children.forEach(markSubtreeOpen);
+        parent.children.push(...children);
+        parent.open = true;
+        refreshDepth(tree, 0);
+        selected = children[0];
+        editing = false;
+        editInput = null;
+        editBaseline = null;
+        layout(tree);
+        place(tree, 0, 0);
+        draw();
+        saveLocal();
+        const added = children.reduce((sum, child) => sum + countNodes(child), 0);
+        toast(`已粘贴 ${added} 个节点`);
+        return true;
+      }
+
       function deleteNode(node) {
         if (!canEdit()) return;
         const info = locate(node);
@@ -2928,6 +2974,33 @@
 
       undoBtn.addEventListener("click", undo);
       redoBtn.addEventListener("click", redo);
+
+      window.addEventListener("paste", (event) => {
+        if (!canEdit() || !selected || !tree) return;
+        if (
+          notePop.classList.contains("show") ||
+          iconPop.classList.contains("show") ||
+          confirmModal.classList.contains("show") ||
+          downloadModal.classList.contains("show")
+        ) {
+          return;
+        }
+        const target = event.target;
+        const tag = target && target.tagName;
+        const inField =
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          (target && target.isContentEditable);
+        // Intercept outline paste on the canvas or while editing a node label;
+        // leave other form fields alone.
+        if (inField && !editing) return;
+        const text = event.clipboardData
+          ? event.clipboardData.getData("text/plain")
+          : "";
+        if (!looksLikeOutlinePaste(text)) return;
+        event.preventDefault();
+        pasteOutline(selected, text);
+      });
 
       window.addEventListener("keydown", (event) => {
         if (iconPop.classList.contains("show") && event.key === "Escape") {

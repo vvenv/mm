@@ -27,6 +27,8 @@ import {
   normalizeFontId,
   normalizeThemeId,
   parseMarkdown,
+  looksLikeOutlinePaste,
+  parseOutlinePaste,
   readAppMode,
   readFontId,
   readThemeId,
@@ -469,6 +471,66 @@ test("pathToNode / nodeAtPath round-trip", () => {
   assert.deepEqual(path, [0, 0]);
   assert.equal(nodeAtPath(tree, path).title, "b");
   assert.deepEqual(pathToNode(tree, tree), []);
+});
+
+test("looksLikeOutlinePaste detects nested lists and plain indents", () => {
+  assert.equal(looksLikeOutlinePaste("单行"), false);
+  assert.equal(looksLikeOutlinePaste("一行\n两行无结构"), false);
+  assert.equal(
+    looksLikeOutlinePaste(`	- 领域
+		- Web
+			- 管理后台`),
+    true,
+  );
+  assert.equal(
+    looksLikeOutlinePaste(`经验
+  阶段
+    副驾驶`),
+    true,
+  );
+});
+
+test("parseOutlinePaste builds children from a mid-tree Markdown fragment", () => {
+  const children = parseOutlinePaste(`	- 领域
+		- Web
+			- 管理后台
+				- 单模型
+				- 单工具
+					- Claude code
+					- Cursor
+				- 几乎不用关心 skills/mcp
+			- 前台网站
+		- App
+			- 我不会任何 App 开发框架，我可以开发好 App 吗？
+				- 产品
+				- 研发
+		- 游戏
+			- 我不会任何游戏开发框架，我可以开发好游戏吗？
+				- 产品
+				- 研发`);
+  assert.equal(children.length, 1);
+  assert.equal(children[0].title, "领域");
+  assert.deepEqual(
+    children[0].children.map((c) => c.title),
+    ["Web", "App", "游戏"],
+  );
+  assert.deepEqual(
+    children[0].children[0].children[0].children.map((c) => c.title),
+    ["单模型", "单工具", "几乎不用关心 skills/mcp"],
+  );
+  assert.deepEqual(
+    children[0].children[0].children[0].children[1].children.map((c) => c.title),
+    ["Claude code", "Cursor"],
+  );
+});
+
+test("parseOutlinePaste accepts plain indented outlines", () => {
+  const children = parseOutlinePaste(`领域
+  Web
+    管理后台`);
+  assert.equal(children[0].title, "领域");
+  assert.equal(children[0].children[0].title, "Web");
+  assert.equal(children[0].children[0].children[0].title, "管理后台");
 });
 
 test("selection redraw invalidates native dblclick targets", () => {

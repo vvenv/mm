@@ -888,6 +888,63 @@ export function parseMarkdown(markdown) {
   return root;
 }
 
+const OUTLINE_LIST_RE = /^\s*[-*+]\s+\S/;
+const OUTLINE_HEADING_RE = /^#{1,6}\s+\S/;
+const OUTLINE_INDENTED_RE = /^[\t ]+\S/;
+
+/**
+ * Detect clipboard text that should expand into a subtree instead of a flat string.
+ * Multi-line Markdown lists / headings, or plain indented outlines.
+ */
+export function looksLikeOutlinePaste(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+$/, ""))
+    .filter((line) => line.trim());
+  if (lines.length < 2) return false;
+
+  let list = 0;
+  let heading = 0;
+  let indented = 0;
+  for (const line of lines) {
+    if (OUTLINE_LIST_RE.test(line)) list += 1;
+    else if (OUTLINE_HEADING_RE.test(line)) heading += 1;
+    else if (OUTLINE_INDENTED_RE.test(line)) indented += 1;
+  }
+
+  if (list >= 2) return true;
+  if (list >= 1 && lines.length >= 2) return true;
+  if (heading >= 1 && (list >= 1 || indented >= 1 || heading >= 2)) return true;
+  if (indented >= 1 && lines.length >= 2) return true;
+  return false;
+}
+
+/** Turn plain indented lines into Markdown list items when no list/heading markers exist. */
+function normalizePlainOutline(text) {
+  const raw = String(text || "");
+  const lines = raw.split(/\r?\n/);
+  const hasMarkup = lines.some(
+    (line) => OUTLINE_LIST_RE.test(line) || OUTLINE_HEADING_RE.test(line),
+  );
+  if (hasMarkup) return raw;
+  return lines
+    .map((line) => {
+      if (!line.trim()) return line;
+      const match = line.match(/^(\s*)(.*)$/);
+      return match ? `${match[1]}- ${match[2]}` : `- ${line}`;
+    })
+    .join("\n");
+}
+
+/**
+ * Parse pasted outline text into child nodes for the paste target.
+ * Document `# title` becomes the paste parent context and is not returned.
+ */
+export function parseOutlinePaste(text) {
+  const root = parseMarkdown(normalizePlainOutline(text));
+  return root.children.map((child) => cloneData(child));
+}
+
 function appendNoteLines(lines, note, prefix) {
   String(note).split(/\n/).forEach((noteLine) => {
     lines.push(`${prefix}> ${noteLine}`);
