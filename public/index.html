@@ -311,6 +311,14 @@
         margin: 0 2px;
         background: var(--sep);
       }
+      .history-chrome {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+      }
+      body[data-mode="view"] .history-chrome {
+        display: none;
+      }
       #map {
         -webkit-touch-callout: none;
         -webkit-user-select: none;
@@ -916,7 +924,7 @@
               <path d="m17 8-5-5-5 5" />
               <path d="M12 3v12" />
             </svg>
-            <span>导入 Markdown</span>
+            <span>导入</span>
           </button>
           <button type="button" id="downloadBtn" role="menuitem">
             <svg
@@ -982,50 +990,52 @@
           编辑
         </button>
       </div>
-      <span class="sep" aria-hidden="true"></span>
-      <span class="tip" data-tooltip="撤销 ⌘Z">
-        <button
-          type="button"
-          class="icon"
-          id="undoBtn"
-          aria-label="撤销"
-          disabled
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+      <span class="history-chrome" id="historyChrome">
+        <span class="sep" aria-hidden="true"></span>
+        <span class="tip" data-tooltip="撤销 ⌘Z">
+          <button
+            type="button"
+            class="icon"
+            id="undoBtn"
+            aria-label="撤销"
+            disabled
           >
-            <path d="M9 14 4 9l5-5" />
-            <path d="M4 9h10a5 5 0 0 1 0 10h-1" />
-          </svg>
-        </button>
-      </span>
-      <span class="tip" data-tooltip="重做 ⌘⇧Z">
-        <button
-          type="button"
-          class="icon"
-          id="redoBtn"
-          aria-label="重做"
-          disabled
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h10a5 5 0 0 1 0 10h-1" />
+            </svg>
+          </button>
+        </span>
+        <span class="tip" data-tooltip="重做 ⌘⇧Z">
+          <button
+            type="button"
+            class="icon"
+            id="redoBtn"
+            aria-label="重做"
+            disabled
           >
-            <path d="m15 14 5-5-5-5" />
-            <path d="M20 9H10a5 5 0 0 0 0 10h1" />
-          </svg>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m15 14 5-5-5-5" />
+              <path d="M20 9H10a5 5 0 0 0 0 10h1" />
+            </svg>
+          </button>
+        </span>
       </span>
     </div>
     <div class="toolbar toolbar-end">
@@ -1072,11 +1082,11 @@
       <input
         id="fileInput"
         type="file"
-        accept=".md,.markdown,text/markdown,text/plain"
+        accept=".md,.markdown,.txt,.opml,.json,.html,.htm,.xmind,text/markdown,text/plain,text/html,application/json,text/xml,application/xml,application/vnd.xmind.workbook"
       />
     </div>
     <svg id="map" role="img" aria-label="Markdown Mindmap"></svg>
-    <div class="drop" id="dropHint">松开以导入 Markdown</div>
+    <div class="drop" id="dropHint">松开以导入</div>
     <div class="ctx-menu" id="ctxMenu" role="menu">
       <button type="button" data-act="rename" role="menuitem">
         <svg
@@ -1308,6 +1318,7 @@
     <script type="module">
       import {
         DOWNLOAD_FORMATS,
+        IMPORT_ACCEPT,
         EMOJI_CATEGORIES,
         FONT_PRESETS,
         THEME_PRESETS,
@@ -1323,7 +1334,8 @@
         nodeAtPath,
         normalizeDownloadName,
         pageTitleOf,
-        parseMarkdown,
+        parseImportFile,
+        isImportableFile,
         looksLikeOutlinePaste,
         parseOutlinePaste,
         subtreeToOutline,
@@ -1339,7 +1351,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103c";
+      } from "./mm-core.js?v=20261103d";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1363,7 +1375,11 @@
                 desc: "列表项下的段落会变成副标题",
                 children: [],
               },
-              { title: "拖放或菜单导入", desc: "覆盖前会确认", children: [] },
+              {
+                title: "拖放或菜单导入",
+                desc: "Markdown / OPML / JSON / HTML / XMind",
+                children: [],
+              },
             ],
           },
           {
@@ -1448,6 +1464,7 @@
       const viewport = document.createElementNS(NS, "g");
       const toastEl = document.getElementById("toast");
       const fileInput = document.getElementById("fileInput");
+      fileInput.accept = IMPORT_ACCEPT;
       const ctxMenu = document.getElementById("ctxMenu");
       const undoBtn = document.getElementById("undoBtn");
       const uploadBtn = document.getElementById("uploadBtn");
@@ -1627,18 +1644,12 @@
         });
         uploadBtn.disabled = !canEdit();
         uploadBtn.title = canEdit()
-          ? "导入 Markdown"
+          ? "导入 Markdown / OPML / JSON / HTML / XMind"
           : "只读模式下不能导入";
         closeDocBtn.disabled = !canEdit();
         closeDocBtn.title = canEdit()
           ? "关闭文档"
           : "只读模式下不能关闭文档";
-        undoBtn.parentElement.dataset.tooltip = canEdit()
-          ? "撤销 ⌘Z"
-          : "只读模式下不能撤销";
-        redoBtn.parentElement.dataset.tooltip = canEdit()
-          ? "重做 ⌘⇧Z"
-          : "只读模式下不能重做";
       }
 
       function setAppMode(mode) {
@@ -3668,7 +3679,11 @@
         if (recordHistory) pushHistory();
         tree = next;
         selected = null;
-        if (name) fileName = name.replace(/\.markdown$/i, ".md");
+        if (name) {
+          fileName = name
+            .replace(/\.markdown$/i, ".md")
+            .replace(/\.(opml|json|html|htm|xmind)$/i, ".md");
+        }
         prepare(tree, keepOpen);
         const title = pageTitleOf(tree);
         document.title = title + " · mm";
@@ -3681,7 +3696,7 @@
       function openImportConfirm(file) {
         pendingConfirm = { type: "import", file };
         confirmTitle.textContent = "覆盖当前导图？";
-        confirmText.textContent = `导入「${file.name || "Markdown"}」将替换当前导图。可之后撤销。`;
+        confirmText.textContent = `导入「${file.name || "文件"}」将替换当前导图。可之后撤销。`;
         confirmOk.textContent = "覆盖导入";
         confirmModal.classList.add("show");
       }
@@ -3727,11 +3742,11 @@
 
       async function doImport(file) {
         try {
-          const text = await file.text();
-          loadTree(parseMarkdown(text), file.name || "outline.md", false, {
+          const { tree: next } = await parseImportFile(file);
+          loadTree(next, file.name || "outline.md", false, {
             recordHistory: true,
           });
-          toast("已导入 " + (file.name || "Markdown"));
+          toast("已导入 " + (file.name || "文件"));
         } catch (error) {
           toast(error.message || String(error));
         }
@@ -3743,12 +3758,8 @@
           toast("只读模式下不能导入");
           return;
         }
-        if (
-          !/\.(md|markdown|txt)$/i.test(file.name || "") &&
-          file.type &&
-          !/^text\//.test(file.type)
-        ) {
-          toast("请选择 Markdown 文本文件");
+        if (!isImportableFile(file)) {
+          toast("请选择 Markdown / OPML / JSON / HTML / XMind 文件");
           return;
         }
         if (shouldConfirmOverwrite(tree)) openImportConfirm(file);
