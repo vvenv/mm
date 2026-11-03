@@ -20,6 +20,10 @@ import {
   decodeSharePayload,
   encodeSharePayload,
   parseShareIdFromSearch,
+  clearShareVisit,
+  markShareVisit,
+  takeShareExit,
+  SHARE_VISIT_KEY,
   searchEmojis,
   formatListLabel,
   nodeAtPath,
@@ -763,6 +767,27 @@ test("createShareLinks prefers builtin short then external then long-only", asyn
 
   assert.equal(parseShareIdFromSearch("?s=Ab12Cd34"), "Ab12Cd34");
   assert.equal(parseShareIdFromSearch("?s=!!"), null);
+
+  const visit = {
+    data: new Map(),
+    getItem(key) {
+      return this.data.has(key) ? this.data.get(key) : null;
+    },
+    setItem(key, value) {
+      this.data.set(key, String(value));
+    },
+    removeItem(key) {
+      this.data.delete(key);
+    },
+  };
+  assert.equal(takeShareExit(visit), false);
+  assert.equal(markShareVisit(visit), true);
+  assert.equal(visit.getItem(SHARE_VISIT_KEY), "1");
+  assert.equal(takeShareExit(visit), true);
+  assert.equal(takeShareExit(visit), false);
+  markShareVisit(visit);
+  clearShareVisit(visit);
+  assert.equal(takeShareExit(visit), false);
 
   const built = await shortenWithBuiltin("abcPAYLOAD", {
     apiOrigin: "https://s.wenfu.dev",

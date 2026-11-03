@@ -1649,6 +1649,9 @@
         parseImportFile,
         parseShareHash,
         parseShareIdFromSearch,
+        clearShareVisit,
+        markShareVisit,
+        takeShareExit,
         isImportableFile,
         looksLikeOutlinePaste,
         parseOutlinePaste,
@@ -1665,7 +1668,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103f";
+      } from "./mm-core.js?v=20261103g";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1778,6 +1781,8 @@
       let iconQuery = "";
       /** Opened from a share link; skip localStorage until the user saves a copy. */
       let shareGuest = false;
+      /** Left a share link in this tab; show the demo without replacing the saved doc. */
+      let shareExitDemo = false;
       let shareLinks = { longUrl: "", shortUrl: "" };
 
       const NS = "http://www.w3.org/2000/svg";
@@ -2012,6 +2017,10 @@
 
       function saveLocal() {
         if (shareGuest) return;
+        if (shareExitDemo) {
+          if (appMode !== "edit") return;
+          shareExitDemo = false;
+        }
         store.save(fileName, tree);
       }
 
@@ -2039,6 +2048,7 @@
           return;
         }
         shareGuest = false;
+        clearShareVisit();
         syncShareBanner();
         clearShareParamsFromUrl();
         saveLocal();
@@ -4161,6 +4171,8 @@
         hideNotePop({ save: false });
         hideIconPop();
         shareGuest = false;
+        shareExitDemo = false;
+        clearShareVisit();
         syncShareBanner();
         clearShareParamsFromUrl();
         loadTree(cloneData(DEMO), "mindmap.md", true, { persist: false });
@@ -4507,6 +4519,7 @@
         svg.setAttribute("aria-label", pageTitleOf(tree));
         appMode = "view";
         writeAppMode(appMode);
+        markShareVisit();
         syncShareBanner();
       }
 
@@ -4531,7 +4544,8 @@
       }
 
       if (!openedShare) {
-        const cached = store.load();
+        const exitShare = takeShareExit();
+        const cached = exitShare ? null : store.load();
         if (cached) {
           tree = cached.tree;
           fileName = cached.fileName || "mindmap.md";
@@ -4540,7 +4554,13 @@
           svg.setAttribute("aria-label", pageTitleOf(tree));
         } else {
           tree = cloneData(DEMO);
+          fileName = "mindmap.md";
           prepare(tree, true);
+          if (exitShare) {
+            shareExitDemo = true;
+            document.title = pageTitleOf(tree) + " · mm";
+            svg.setAttribute("aria-label", pageTitleOf(tree));
+          }
         }
       }
       syncModeSwitch();

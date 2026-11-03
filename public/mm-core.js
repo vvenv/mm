@@ -1283,6 +1283,29 @@ export function parseShareIdFromSearch(search) {
   return id && SHARE_ID_RE.test(id) ? id : null;
 }
 
+/** This tab opened a share link. The next load without one should show the demo. */
+export const SHARE_VISIT_KEY = "mm.shareVisit";
+
+export function markShareVisit(storage = globalThis.sessionStorage) {
+  if (!storage) return false;
+  storage.setItem(SHARE_VISIT_KEY, "1");
+  return true;
+}
+
+export function clearShareVisit(storage = globalThis.sessionStorage) {
+  if (!storage) return;
+  storage.removeItem(SHARE_VISIT_KEY);
+}
+
+/** One-shot. True when this tab had opened a share and this load is not one. */
+export function takeShareExit(storage = globalThis.sessionStorage) {
+  if (!storage) return false;
+  const pending = storage.getItem(SHARE_VISIT_KEY) === "1";
+  if (!pending) return false;
+  storage.removeItem(SHARE_VISIT_KEY);
+  return true;
+}
+
 /**
  * Create a first-party short link via s.wenfu.dev.
  * @returns {{ shortUrl: string, provider: string, id: string }}
