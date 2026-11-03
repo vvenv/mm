@@ -950,9 +950,74 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 12px;
       }
-      #shareModal .modal-field:last-of-type,
-      #downloadModal .modal-field:last-of-type {
+      #shareModal .modal-field:last-of-type {
         margin-bottom: 0;
+      }
+      #downloadModal .modal-format {
+        display: flex;
+        align-items: stretch;
+        margin: 0;
+        min-width: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--surface-3);
+        overflow: hidden;
+      }
+      #downloadModal .modal-format-label {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0 10px;
+        border-right: 1px solid var(--border);
+        background: var(--bg, var(--surface));
+        color: var(--fg-label);
+        font-size: 13px;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+      }
+      #downloadModal .seg {
+        display: flex;
+        flex: 1 1 auto;
+        flex-wrap: nowrap;
+        gap: 2px;
+        min-width: 0;
+        padding: 3px;
+      }
+      #downloadModal .seg button {
+        flex: 1 1 0;
+        min-width: 0;
+        margin: 0;
+        padding: 7px 2px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--fg-muted);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #downloadModal .seg button:hover:not(:disabled):not([aria-checked="true"]) {
+        border-color: transparent;
+        background: transparent;
+        color: var(--fg);
+      }
+      #downloadModal .seg button[aria-checked="true"] {
+        background: var(--surface);
+        color: var(--fg);
+        box-shadow: var(--shadow-switch);
+        font-weight: 600;
+      }
+      #downloadModal .seg button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      #downloadModal .seg button:focus-visible {
+        outline: 2px solid var(--fg);
+        outline-offset: 1px;
       }
       #shareModal .modal-actions,
       #downloadModal .modal-actions {
@@ -1444,9 +1509,14 @@
             spellcheck="false"
           />
         </div>
-        <div class="modal-field">
-          <label for="downloadFormat">格式</label>
-          <select id="downloadFormat"></select>
+        <div class="modal-format">
+          <span class="modal-format-label" id="downloadFormatLabel">格式</span>
+          <div
+            class="seg"
+            id="downloadFormat"
+            role="radiogroup"
+            aria-labelledby="downloadFormatLabel"
+          ></div>
         </div>
         <div class="modal-actions">
           <button type="button" id="downloadCancel">取消</button>
@@ -1849,15 +1919,75 @@
         return node && node.icon ? String(node.icon).trim() : "";
       }
 
+      function getDownloadFormat() {
+        const active = downloadFormat.querySelector('[aria-checked="true"]');
+        return active ? active.dataset.value : "markdown";
+      }
+
+      function setDownloadFormat(id) {
+        const buttons = [...downloadFormat.querySelectorAll('[role="radio"]')];
+        let matched = false;
+        buttons.forEach((btn) => {
+          const on = btn.dataset.value === id && !btn.disabled;
+          if (on) matched = true;
+          btn.setAttribute("aria-checked", on ? "true" : "false");
+          btn.tabIndex = on ? 0 : -1;
+        });
+        if (!matched) {
+          const first = buttons.find((btn) => !btn.disabled);
+          if (first) {
+            first.setAttribute("aria-checked", "true");
+            first.tabIndex = 0;
+          }
+        }
+      }
+
       DOWNLOAD_FORMATS.forEach((format) => {
-        const option = document.createElement("option");
-        option.value = format.id;
-        option.textContent = format.available
+        const btn = document.createElement("button");
+        const shortLabel = format.id === "html" ? "HTML" : format.label;
+        btn.type = "button";
+        btn.role = "radio";
+        btn.dataset.value = format.id;
+        btn.textContent = shortLabel;
+        btn.disabled = !format.available;
+        btn.title = format.available
           ? format.label
           : `${format.label}（即将支持）`;
-        option.disabled = !format.available;
-        if (format.available) option.selected = true;
-        downloadFormat.appendChild(option);
+        btn.setAttribute("aria-label", format.label);
+        btn.setAttribute("aria-checked", "false");
+        btn.tabIndex = -1;
+        if (!format.available) {
+          btn.setAttribute("aria-disabled", "true");
+        }
+        btn.addEventListener("click", () => {
+          if (btn.disabled) return;
+          setDownloadFormat(format.id);
+        });
+        downloadFormat.appendChild(btn);
+      });
+      setDownloadFormat("markdown");
+
+      downloadFormat.addEventListener("keydown", (event) => {
+        const buttons = [
+          ...downloadFormat.querySelectorAll('[role="radio"]:not(:disabled)'),
+        ];
+        if (!buttons.length) return;
+        const current = downloadFormat.querySelector('[aria-checked="true"]');
+        const index = Math.max(0, buttons.indexOf(current));
+        let next = -1;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          next = (index + 1) % buttons.length;
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          next = (index - 1 + buttons.length) % buttons.length;
+        } else if (event.key === "Home") {
+          next = 0;
+        } else if (event.key === "End") {
+          next = buttons.length - 1;
+        }
+        if (next < 0) return;
+        event.preventDefault();
+        setDownloadFormat(buttons[next].dataset.value);
+        buttons[next].focus();
       });
 
       function toast(message) {
@@ -4062,7 +4192,7 @@
           /\.(md|markdown|txt|html|xmind|opml|json)$/i,
           "",
         );
-        downloadFormat.value = "markdown";
+        setDownloadFormat("markdown");
         downloadModal.classList.add("show");
         downloadName.focus();
         downloadName.select();
@@ -4076,7 +4206,7 @@
         try {
           const packed = buildDownload(
             tree,
-            downloadFormat.value,
+            getDownloadFormat(),
             downloadName.value,
           );
           const blob = new Blob([packed.content], { type: packed.mime });
