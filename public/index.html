@@ -1171,7 +1171,7 @@
               <path d="m10 12 4 4" />
               <path d="m14 12-4 4" />
             </svg>
-            <span>回到欢迎页</span>
+            <span>关闭</span>
           </button>
         </div>
       </div>
@@ -1729,7 +1729,7 @@
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
               {
-                title: "菜单可回到欢迎页",
+                title: "菜单可关闭",
                 desc: "清除本地自动保存并重置为示例导图",
                 children: [],
               },
@@ -2078,10 +2078,8 @@
         uploadBtn.title = canEdit()
           ? "导入 Markdown / OPML / JSON / HTML / XMind"
           : "只读模式下不能导入";
-        closeDocBtn.disabled = !canEdit();
-        closeDocBtn.title = canEdit()
-          ? "清除本地保存并回到欢迎页"
-          : "只读模式下不能回到欢迎页";
+        closeDocBtn.disabled = false;
+        closeDocBtn.title = "清除本地保存并回到欢迎页";
       }
 
       function setAppMode(mode) {
@@ -4142,10 +4140,10 @@
 
       function openCloseConfirm() {
         pendingConfirm = { type: "close" };
-        confirmTitle.textContent = "回到欢迎页？";
+        confirmTitle.textContent = "关闭当前文档？";
         confirmText.textContent =
           "将清除本地自动保存并重置为示例导图，此操作不可撤销。";
-        confirmOk.textContent = "回到欢迎页";
+        confirmOk.textContent = "关闭";
         confirmModal.classList.add("show");
       }
 
@@ -4169,14 +4167,11 @@
         history.clear();
         store.clear();
         updateHistoryChrome();
-        toast("已回到欢迎页");
+        syncModeSwitch();
+        toast("已关闭");
       }
 
       function requestCloseDocument() {
-        if (!canEdit()) {
-          toast("只读模式下不能回到欢迎页");
-          return;
-        }
         if (editing) commitEdit(true);
         if (noteEditing) commitNote(true);
         openCloseConfirm();

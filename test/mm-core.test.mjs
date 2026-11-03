@@ -368,7 +368,7 @@ test("index.html edits on single click and does not rely on native dblclick", ()
   assert.match(html, /id="closeDocBtn"/);
   assert.match(html, /requestCloseDocument/);
   assert.match(html, /closeDocument/);
-  assert.match(html, /回到欢迎页？/);
+  assert.match(html, /关闭当前文档？/);
   assert.match(html, /store\.clear\(\)/);
   assert.match(html, /缩进段落 → 副标题/);
   assert.match(html, /undoBtn/);
