@@ -446,8 +446,15 @@
         height: 16px;
         flex: 0 0 auto;
       }
-      .toolbar .file-menu-panel button span {
+      .toolbar .file-menu-panel button span:first-of-type {
         flex: 1 1 auto;
+      }
+      .toolbar .file-menu-panel button .kbd {
+        flex: 0 0 auto;
+        margin-left: 16px;
+        color: var(--fg-subtle);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
       }
       .settings-row {
         display: flex;
@@ -1103,7 +1110,12 @@
           role="menu"
           aria-label="文件"
         >
-          <button type="button" id="uploadBtn" role="menuitem">
+          <button
+            type="button"
+            id="uploadBtn"
+            role="menuitem"
+            aria-keyshortcuts="Control+I Meta+I"
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -1118,8 +1130,14 @@
               <path d="M12 3v12" />
             </svg>
             <span>导入</span>
+            <span class="kbd">⌘I</span>
           </button>
-          <button type="button" id="downloadBtn" role="menuitem">
+          <button
+            type="button"
+            id="downloadBtn"
+            role="menuitem"
+            aria-keyshortcuts="Control+S Meta+S Control+E Meta+E"
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -1134,6 +1152,7 @@
               <path d="M12 15V3" />
             </svg>
             <span>导出</span>
+            <span class="kbd">⌘S</span>
           </button>
           <button type="button" id="shareBtn" role="menuitem">
             <svg
@@ -1695,7 +1714,7 @@
                 children: [],
               },
               {
-                title: "拖放或菜单导入",
+                title: "拖放、⌘I 或菜单导入",
                 desc: "Markdown / OPML / JSON / HTML / XMind",
                 children: [],
               },
@@ -1730,7 +1749,7 @@
             icon: "⚙️",
             open: true,
             children: [
-              { title: "导出可选格式", desc: "Markdown · XMind · HTML · OPML · JSON", children: [] },
+              { title: "⌘S 或 ⌘E 导出", desc: "Markdown · XMind · HTML · OPML · JSON", children: [] },
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
               {
@@ -2317,7 +2336,9 @@
         editing = false;
         editInput = null;
         editBaseline = null;
-        relayout(node);
+        // Pin the root so the pan stays put. Anchoring the moved node
+        // would scroll the whole map by however far its slot changed.
+        relayout(tree);
         saveLocal();
         return true;
       }
@@ -4021,6 +4042,37 @@
           else hideNotePop({ save: false });
           return;
         }
+        const mod = event.metaKey || event.ctrlKey;
+        const chord = event.key.toLowerCase();
+        if (
+          mod &&
+          !event.altKey &&
+          !event.shiftKey &&
+          !event.repeat &&
+          !event.isComposing &&
+          (chord === "s" || chord === "e" || chord === "i")
+        ) {
+          event.preventDefault();
+          if (chord === "i") {
+            if (confirmModal.classList.contains("show")) closeConfirm(false);
+            if (downloadModal.classList.contains("show")) closeDownload();
+            if (shareModal.classList.contains("show")) closeShare();
+            if (!canEdit()) {
+              toast("只读模式下不能导入");
+              return;
+            }
+            uploadBtn.click();
+            return;
+          }
+          if (downloadModal.classList.contains("show")) {
+            confirmDownload();
+            return;
+          }
+          if (confirmModal.classList.contains("show")) closeConfirm(false);
+          if (shareModal.classList.contains("show")) closeShare();
+          downloadBtn.click();
+          return;
+        }
         if (
           confirmModal.classList.contains("show") ||
           downloadModal.classList.contains("show") ||
@@ -4034,7 +4086,6 @@
           }
           return;
         }
-        const mod = event.metaKey || event.ctrlKey;
         if (mod && event.key.toLowerCase() === "z") {
           if (!canEdit()) return;
           event.preventDefault();
@@ -4221,6 +4272,7 @@
 
       function openDownload() {
         if (editing) commitEdit(true);
+        if (noteEditing) commitNote(true);
         downloadName.value = (fileName || tree.title || "mindmap").replace(
           /\.(md|markdown|txt|html|xmind|opml|json)$/i,
           "",
