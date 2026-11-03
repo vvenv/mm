@@ -305,6 +305,11 @@
         outline: 2px solid var(--fg);
         outline-offset: 1px;
       }
+      .toolbar .mode-switch button:disabled {
+        opacity: 0.45;
+        cursor: default;
+        pointer-events: none;
+      }
       .toolbar .sep {
         width: 1px;
         height: 18px;
@@ -2032,6 +2037,7 @@
         syncShareBanner();
         clearShareParamsFromUrl();
         saveLocal();
+        syncModeSwitch();
         if (switchToEdit) setAppMode("edit");
         toast("已保存到本机");
       }
@@ -2054,8 +2060,12 @@
         modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
           const on = btn.getAttribute("data-mode") === appMode;
           btn.setAttribute("aria-checked", on ? "true" : "false");
-          btn.tabIndex = on ? 0 : -1;
+          btn.tabIndex = shareGuest ? -1 : on ? 0 : -1;
+          btn.disabled = shareGuest;
         });
+        modeSwitch.title = shareGuest
+          ? "分享只读中，请先保存副本"
+          : "切换只读 / 编辑";
         uploadBtn.disabled = !canEdit();
         uploadBtn.title = canEdit()
           ? "导入 Markdown / OPML / JSON / HTML / XMind"
@@ -2068,13 +2078,9 @@
 
       function setAppMode(mode) {
         const next = mode === "view" ? "view" : "edit";
-        if (next === "edit" && shareGuest) {
-          shareGuest = false;
-          syncShareBanner();
-          clearShareParamsFromUrl();
-          // Persist before mode chrome updates so later saveLocal calls work.
-          store.save(fileName, tree);
-          toast("已保存到本机");
+        if (shareGuest) {
+          toast("请先保存副本");
+          return;
         }
         if (next === appMode) return;
         appMode = next;
@@ -4354,8 +4360,12 @@
         if (event.target === shareModal) closeShare();
       });
       modeSwitch.addEventListener("click", (event) => {
+        if (shareGuest) {
+          toast("请先保存副本");
+          return;
+        }
         const btn = event.target.closest("[data-mode]");
-        if (!btn) return;
+        if (!btn || btn.disabled) return;
         setAppMode(btn.getAttribute("data-mode"));
       });
       modeSwitch.addEventListener("keydown", (event) => {
@@ -4367,6 +4377,10 @@
         )
           return;
         event.preventDefault();
+        if (shareGuest) {
+          toast("请先保存副本");
+          return;
+        }
         const next =
           event.key === "ArrowLeft" || event.key === "Home" ? "view" : "edit";
         setAppMode(next);
