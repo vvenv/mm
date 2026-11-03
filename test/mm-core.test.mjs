@@ -5,13 +5,20 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   EMOJI_CATEGORIES,
+  EXTERNAL_SHORTEN_MAX_LEN,
+  SHARE_HASH_PREFIX,
   buildDownload,
+  buildShareHash,
+  buildShareLongUrl,
   captureState,
   cloneData,
   countNodes,
   createHistory,
   createLocalStore,
   createRecentIconsStore,
+  createShareLinks,
+  decodeSharePayload,
+  encodeSharePayload,
   searchEmojis,
   formatListLabel,
   nodeAtPath,
@@ -26,7 +33,10 @@ import {
   normalizeDownloadName,
   normalizeFontId,
   normalizeThemeId,
+  parseShareHash,
+  preferExternalShorten,
   parseMarkdown,
+  shortenWithExternal,
   parseImportFile,
   parseJsonTree,
   parseOpml,
@@ -670,4 +680,70 @@ test("parseImportFile round-trips markdown json opml html xmind", async () => {
   assert.equal(xmind.tree.children[0].desc, "note line");
   assert.equal(xmind.tree.children[0].note, "memo");
   assert.equal(xmind.tree.children[0].children[0].title, "b");
+});
+
+test("share payload round-trips through #v1= hash", async () => {
+  const tree = parseMarkdown(`# 分享测试
+## 副标题
+
+- 分支
+  > 备注
+  - 子节点 🎯
+`);
+  const payload = await encodeSharePayload(tree);
+  assert.match(payload, /^[A-Za-z0-9_-]+$/);
+  const decoded = await decodeSharePayload(payload);
+  assert.equal(decoded.title, "分享测试");
+  assert.equal(decoded.desc, "副标题");
+  assert.equal(decoded.children[0].title, "分支");
+  assert.equal(decoded.children[0].note, "备注");
+  assert.equal(decoded.children[0].children[0].title, "子节点 🎯");
+
+  const hash = await buildShareHash(tree);
+  assert.equal(hash.startsWith(`#${SHARE_HASH_PREFIX}`), true);
+  const fromHash = await parseShareHash(hash);
+  assert.equal(fromHash.title, "分享测试");
+  assert.equal(await parseShareHash("#nope"), null);
+  assert.equal(await parseShareHash("#v1="), null);
+  assert.equal(await parseShareHash("#v1=!!!"), null);
+
+  const longUrl = await buildShareLongUrl(tree, "https://mm.wenfu.dev");
+  assert.equal(longUrl.startsWith("https://mm.wenfu.dev/#v1="), true);
+  assert.equal(preferExternalShorten(100), true);
+  assert.equal(preferExternalShorten(EXTERNAL_SHORTEN_MAX_LEN), true);
+  assert.equal(preferExternalShorten(EXTERNAL_SHORTEN_MAX_LEN + 1), false);
+});
+
+test("createShareLinks shortens when under limit and falls back on failure", async () => {
+  const tree = { title: "Hi", children: [{ title: "A", children: [] }] };
+  const ok = await createShareLinks(tree, "https://mm.wenfu.dev", {
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ shorturl: "https://is.gd/abc" }),
+    }),
+  });
+  assert.equal(ok.shortened, true);
+  assert.equal(ok.shortUrl, "https://is.gd/abc");
+  assert.equal(ok.provider, "isgd");
+  assert.match(ok.longUrl, /^https:\/\/mm\.wenfu\.dev\/#v1=/);
+
+  const fail = await createShareLinks(tree, "https://mm.wenfu.dev", {
+    fetchImpl: async () => {
+      throw new Error("network");
+    },
+  });
+  assert.equal(fail.shortened, false);
+  assert.equal(fail.shortUrl, null);
+  assert.match(fail.longUrl, /^https:\/\/mm\.wenfu\.dev\/#v1=/);
+
+  await assert.rejects(
+    () =>
+      shortenWithExternal("https://mm.wenfu.dev/#v1=x", {
+        fetchImpl: async () => ({
+          ok: true,
+          json: async () => ({ errormessage: "Error: Please enter a valid URL to shorten" }),
+        }),
+      }),
+    /isgd:|vgd:/,
+  );
 });

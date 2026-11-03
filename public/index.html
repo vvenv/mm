@@ -271,15 +271,15 @@
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
-        height: 30px;
-        padding: 2px;
+        height: 22px;
+        padding: 4px;
         border-radius: 8px;
         background: var(--surface-3);
       }
       .toolbar .mode-switch button {
-        height: 26px;
+        height: 20px;
         margin: 0;
-        padding: 0 10px;
+        padding: 0 8px;
         border: 0;
         border-radius: 6px;
         background: transparent;
@@ -877,6 +877,115 @@
         border-color: var(--primary-border-hover);
         background: var(--primary-hover);
       }
+      .modal .share-url {
+        display: flex;
+        align-items: stretch;
+        margin: 0 0 14px;
+        min-width: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .modal .share-url > label {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0 10px;
+        border-right: 1px solid var(--border);
+        background: var(--bg, var(--surface));
+        color: var(--fg-label);
+        font-size: 13px;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+      }
+      .modal .share-url input {
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        padding: 9px 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        background: transparent;
+      }
+      .modal .share-url input:focus {
+        outline: none;
+      }
+      .modal .share-url:focus-within {
+        border-color: var(--primary);
+      }
+      .modal .share-url > button.icon {
+        flex: 0 0 auto;
+        width: 36px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-left: 1px solid var(--border);
+        border-radius: 0;
+        background: var(--bg, var(--surface));
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal .share-url > button.icon:hover:not(:disabled) {
+        border-color: var(--border);
+        background: var(--hover);
+      }
+      .modal .share-url > button.icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .modal .share-url > button.icon:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      #shareModal .share-url:last-of-type {
+        margin-bottom: 0;
+      }
+      #shareModal .modal-actions {
+        margin-top: 20px;
+      }
+      .share-banner {
+        position: fixed;
+        left: 50%;
+        bottom: 20px;
+        z-index: 4;
+        display: none;
+        transform: translateX(-50%);
+        align-items: center;
+        gap: 10px;
+        max-width: calc(100vw - 24px);
+        padding: 10px 12px 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        box-shadow: var(--shadow-modal);
+        font-size: 13px;
+        line-height: 1.3;
+        color: var(--fg-soft);
+      }
+      .share-banner.show {
+        display: flex;
+      }
+      .share-banner button {
+        flex: 0 0 auto;
+        padding: 6px 12px;
+        border: 1px solid var(--primary);
+        border-radius: 999px;
+        background: var(--primary);
+        color: var(--primary-fg);
+        font-size: 13px;
+        line-height: 1.2;
+        cursor: pointer;
+      }
+      .share-banner button:hover {
+        border-color: var(--primary-border-hover);
+        background: var(--primary-hover);
+      }
     </style>
   </head>
   <body>
@@ -941,6 +1050,24 @@
               <path d="M12 15V3" />
             </svg>
             <span>导出</span>
+          </button>
+          <button type="button" id="shareBtn" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <path d="m8.59 13.51 6.83 3.98" />
+              <path d="m15.41 6.51-6.82 3.98" />
+            </svg>
+            <span>分享</span>
           </button>
           <div class="sep" aria-hidden="true"></div>
           <button type="button" class="danger" id="closeDocBtn" role="menuitem">
@@ -1314,6 +1441,94 @@
         </div>
       </div>
     </div>
+    <div
+      class="modal-backdrop"
+      id="shareModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shareTitle"
+    >
+      <div class="modal">
+        <h2 id="shareTitle">分享</h2>
+        <div class="share-url">
+          <label for="shareLongUrl">长链</label>
+          <input
+            id="shareLongUrl"
+            type="text"
+            readonly
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="生成中…"
+          />
+          <button
+            type="button"
+            class="icon"
+            id="shareCopyLong"
+            aria-label="复制长链"
+            title="复制长链"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path
+                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="share-url">
+          <label for="shareShortUrl">短链</label>
+          <input
+            id="shareShortUrl"
+            type="text"
+            readonly
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="生成中…"
+          />
+          <button
+            type="button"
+            class="icon"
+            id="shareCopyShort"
+            aria-label="复制短链"
+            title="复制短链"
+            disabled
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path
+                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="shareCancel">关闭</button>
+          <button type="button" class="primary" id="shareSystem" hidden>
+            系统分享
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="share-banner" id="shareBanner" role="status">
+      <span>只读分享 · 可保存副本到本机</span>
+      <button type="button" id="shareSaveCopy">保存副本</button>
+    </div>
     <p class="toast" id="toast" role="status"></p>
     <script type="module">
       import {
@@ -1329,12 +1544,15 @@
         createHistory,
         createLocalStore,
         createRecentIconsStore,
+        createShareLinks,
+        EXTERNAL_SHORTEN_MAX_LEN,
         fontStacksFor,
         searchEmojis,
         nodeAtPath,
         normalizeDownloadName,
         pageTitleOf,
         parseImportFile,
+        parseShareHash,
         isImportableFile,
         looksLikeOutlinePaste,
         parseOutlinePaste,
@@ -1351,7 +1569,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103d";
+      } from "./mm-core.js?v=20261103e";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1419,6 +1637,11 @@
                 desc: "清除本地自动保存并回到欢迎页",
                 children: [],
               },
+              {
+                title: "菜单可分享链接",
+                desc: "URL 内嵌数据；过长时保留长链",
+                children: [],
+              },
               { title: "首次打开后可离线使用", children: [] },
             ],
           },
@@ -1457,6 +1680,9 @@
       let iconNode = null;
       let iconTabId = "recent";
       let iconQuery = "";
+      /** Opened from a share link; skip localStorage until the user saves a copy. */
+      let shareGuest = false;
+      let shareLinks = { longUrl: "", shortUrl: "" };
 
       const NS = "http://www.w3.org/2000/svg";
       const LONG_PRESS_MS = 520;
@@ -1469,6 +1695,7 @@
       const undoBtn = document.getElementById("undoBtn");
       const uploadBtn = document.getElementById("uploadBtn");
       const downloadBtn = document.getElementById("downloadBtn");
+      const shareBtn = document.getElementById("shareBtn");
       const closeDocBtn = document.getElementById("closeDocBtn");
       const modeSwitch = document.getElementById("modeSwitch");
       const themeSelect = document.getElementById("themeSelect");
@@ -1486,6 +1713,15 @@
       const downloadModal = document.getElementById("downloadModal");
       const downloadName = document.getElementById("downloadName");
       const downloadFormat = document.getElementById("downloadFormat");
+      const shareModal = document.getElementById("shareModal");
+      const shareLongUrl = document.getElementById("shareLongUrl");
+      const shareShortUrl = document.getElementById("shareShortUrl");
+      const shareCopyLong = document.getElementById("shareCopyLong");
+      const shareCopyShort = document.getElementById("shareCopyShort");
+      const shareCancel = document.getElementById("shareCancel");
+      const shareSystem = document.getElementById("shareSystem");
+      const shareBanner = document.getElementById("shareBanner");
+      const shareSaveCopy = document.getElementById("shareSaveCopy");
       const notePop = document.getElementById("notePop");
       const noteView = document.getElementById("noteView");
       const noteEdit = document.getElementById("noteEdit");
@@ -1619,7 +1855,34 @@
       }
 
       function saveLocal() {
+        if (shareGuest) return;
         store.save(fileName, tree);
+      }
+
+      function syncShareBanner() {
+        shareBanner.classList.toggle("show", shareGuest);
+      }
+
+      function clearShareHashFromUrl() {
+        if (!location.hash.startsWith("#v1=")) return;
+        history.replaceState(
+          null,
+          "",
+          `${location.pathname}${location.search}`,
+        );
+      }
+
+      function adoptShareCopy({ switchToEdit = false } = {}) {
+        if (!shareGuest) {
+          if (switchToEdit) setAppMode("edit");
+          return;
+        }
+        shareGuest = false;
+        syncShareBanner();
+        clearShareHashFromUrl();
+        saveLocal();
+        if (switchToEdit) setAppMode("edit");
+        toast("已保存到本机");
       }
 
       function currentSnapshot() {
@@ -1654,6 +1917,14 @@
 
       function setAppMode(mode) {
         const next = mode === "view" ? "view" : "edit";
+        if (next === "edit" && shareGuest) {
+          shareGuest = false;
+          syncShareBanner();
+          clearShareHashFromUrl();
+          // Persist before mode chrome updates so later saveLocal calls work.
+          store.save(fileName, tree);
+          toast("已保存到本机");
+        }
         if (next === appMode) return;
         appMode = next;
         writeAppMode(appMode);
@@ -3354,7 +3625,8 @@
           notePop.classList.contains("show") ||
           iconPop.classList.contains("show") ||
           confirmModal.classList.contains("show") ||
-          downloadModal.classList.contains("show")
+          downloadModal.classList.contains("show") ||
+          shareModal.classList.contains("show")
         );
       }
 
@@ -3574,12 +3846,14 @@
         }
         if (
           confirmModal.classList.contains("show") ||
-          downloadModal.classList.contains("show")
+          downloadModal.classList.contains("show") ||
+          shareModal.classList.contains("show")
         ) {
           if (event.key === "Escape") {
             event.preventDefault();
             closeConfirm(false);
             closeDownload();
+            closeShare();
           }
           return;
         }
@@ -3723,6 +3997,9 @@
         hideCtxMenu();
         hideNotePop({ save: false });
         hideIconPop();
+        shareGuest = false;
+        syncShareBanner();
+        clearShareHashFromUrl();
         loadTree(cloneData(DEMO), "mindmap.md", true, { persist: false });
         history.clear();
         store.clear();
@@ -3805,6 +4082,85 @@
         }
       }
 
+      async function copyText(text) {
+        const value = String(text || "");
+        if (!value) return false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(value);
+            return true;
+          }
+        } catch {
+          /* fall through */
+        }
+        try {
+          const area = document.createElement("textarea");
+          area.value = value;
+          area.setAttribute("readonly", "");
+          area.style.position = "fixed";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          area.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      }
+
+      function closeShare() {
+        shareModal.classList.remove("show");
+      }
+
+      function syncShareModalFields() {
+        shareLongUrl.value = shareLinks.longUrl || "";
+        shareShortUrl.value = shareLinks.shortUrl || "";
+        shareCopyShort.disabled = !shareLinks.shortUrl;
+        const canNativeShare =
+          typeof navigator.share === "function" &&
+          !!(shareLinks.shortUrl || shareLinks.longUrl);
+        shareSystem.hidden = !canNativeShare;
+      }
+
+      async function openShare() {
+        if (editing) commitEdit(true);
+        if (noteEditing) commitNote(true);
+        shareLinks = { longUrl: "", shortUrl: "" };
+        shareLongUrl.value = "";
+        shareShortUrl.value = "";
+        shareLongUrl.placeholder = "生成中…";
+        shareShortUrl.placeholder = "生成中…";
+        shareCopyLong.disabled = true;
+        shareCopyShort.disabled = true;
+        shareSystem.hidden = true;
+        shareModal.classList.add("show");
+        try {
+          const result = await createShareLinks(tree, location.origin);
+          shareLinks = {
+            longUrl: result.longUrl,
+            shortUrl: result.shortUrl || "",
+          };
+          shareLongUrl.placeholder = "";
+          if (result.shortened && result.shortUrl) {
+            shareShortUrl.placeholder = "";
+          } else if (result.longUrl.length > EXTERNAL_SHORTEN_MAX_LEN) {
+            shareShortUrl.placeholder = "导图过大，请用长链";
+          } else {
+            shareShortUrl.placeholder = "短链不可用";
+          }
+          syncShareModalFields();
+          shareCopyLong.disabled = !shareLinks.longUrl;
+          shareLongUrl.focus();
+          shareLongUrl.select();
+        } catch (error) {
+          shareLongUrl.placeholder = "生成失败";
+          shareShortUrl.placeholder = "生成失败";
+          shareCopyLong.disabled = true;
+          toast(error.message || String(error));
+        }
+      }
+
       uploadBtn.addEventListener("click", () => {
         setFileMenuOpen(false);
         fileInput.click();
@@ -3812,6 +4168,40 @@
       closeDocBtn.addEventListener("click", () => {
         setFileMenuOpen(false);
         requestCloseDocument();
+      });
+      shareBtn.addEventListener("click", () => {
+        setFileMenuOpen(false);
+        openShare();
+      });
+      shareCancel.addEventListener("click", closeShare);
+      shareCopyLong.addEventListener("click", async () => {
+        if (await copyText(shareLongUrl.value)) toast("已复制长链");
+        else toast("复制失败");
+      });
+      shareCopyShort.addEventListener("click", async () => {
+        if (!shareShortUrl.value) return;
+        if (await copyText(shareShortUrl.value)) toast("已复制短链");
+        else toast("复制失败");
+      });
+      shareSystem.addEventListener("click", async () => {
+        const url = shareLinks.shortUrl || shareLinks.longUrl;
+        if (!url || typeof navigator.share !== "function") return;
+        try {
+          await navigator.share({
+            title: pageTitleOf(tree),
+            text: pageTitleOf(tree),
+            url,
+          });
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          toast(error.message || String(error));
+        }
+      });
+      shareSaveCopy.addEventListener("click", () => {
+        adoptShareCopy({ switchToEdit: false });
+      });
+      shareModal.addEventListener("click", (event) => {
+        if (event.target === shareModal) closeShare();
       });
       modeSwitch.addEventListener("click", (event) => {
         const btn = event.target.closest("[data-mode]");
@@ -3941,16 +4331,34 @@
         if (event.target === downloadModal) closeDownload();
       });
 
-      const cached = store.load();
-      if (cached) {
-        tree = cached.tree;
-        fileName = cached.fileName || "mindmap.md";
+      const shareHashRaw = String(location.hash || "").replace(/^#/, "");
+      const sharedTree = await parseShareHash(location.hash);
+      if (sharedTree) {
+        shareGuest = true;
+        tree = sharedTree;
+        fileName = `${(sharedTree.title || "mindmap").replace(/[\\/:*?"<>|]+/g, "-").trim() || "mindmap"}.md`;
         prepare(tree, true);
         document.title = pageTitleOf(tree) + " · mm";
         svg.setAttribute("aria-label", pageTitleOf(tree));
+        appMode = "view";
+        writeAppMode(appMode);
+        syncShareBanner();
+        toast("只读分享 · 可保存副本");
       } else {
-        tree = cloneData(DEMO);
-        prepare(tree, true);
+        if (shareHashRaw.startsWith("v1=")) {
+          toast("分享链接无效或已损坏");
+        }
+        const cached = store.load();
+        if (cached) {
+          tree = cached.tree;
+          fileName = cached.fileName || "mindmap.md";
+          prepare(tree, true);
+          document.title = pageTitleOf(tree) + " · mm";
+          svg.setAttribute("aria-label", pageTitleOf(tree));
+        } else {
+          tree = cloneData(DEMO);
+          prepare(tree, true);
+        }
       }
       syncModeSwitch();
       frame();

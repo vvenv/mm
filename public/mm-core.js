@@ -1180,6 +1180,143 @@ export function normalizeImportedTree(data) {
   return node;
 }
 
+/** Share payload lives in the URL hash: `#v1=<base64url(deflate-raw(json))>`. */
+export const SHARE_HASH_PREFIX = "v1=";
+/** External shorteners usually reject very long destinations; above this, keep the long URL. */
+export const EXTERNAL_SHORTEN_MAX_LEN = 3500;
+
+const SHARE_SHORTEN_PROVIDERS = [
+  { id: "isgd", endpoint: "https://is.gd/create.php" },
+  { id: "vgd", endpoint: "https://v.gd/create.php" },
+];
+
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBytes(text) {
+  const normalized = String(text || "").replace(/-/g, "+").replace(/_/g, "/");
+  if (!normalized || /[^A-Za-z0-9+/=]/.test(normalized)) {
+    throw new Error("无效的分享载荷");
+  }
+  const pad = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+  const binary = atob(normalized + pad);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+async function deflateRawBytes(bytes) {
+  if (typeof CompressionStream === "undefined") {
+    throw new Error("当前环境不支持压缩");
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function inflateRawBytes(bytes) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("当前环境不支持解压");
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+export async function encodeSharePayload(tree) {
+  const json = JSON.stringify(cloneData(tree));
+  const compressed = await deflateRawBytes(new TextEncoder().encode(json));
+  return bytesToBase64Url(compressed);
+}
+
+export async function decodeSharePayload(payload) {
+  const inflated = await inflateRawBytes(base64UrlToBytes(payload));
+  let data;
+  try {
+    data = JSON.parse(new TextDecoder().decode(inflated));
+  } catch {
+    throw new Error("无效的分享载荷");
+  }
+  return normalizeImportedTree(data);
+}
+
+export async function buildShareHash(tree) {
+  return `#${SHARE_HASH_PREFIX}${await encodeSharePayload(tree)}`;
+}
+
+/** Parse `#v1=...` (or raw `v1=...`). Returns null when absent or invalid. */
+export async function parseShareHash(hash) {
+  const raw = String(hash || "").replace(/^#/, "");
+  if (!raw.startsWith(SHARE_HASH_PREFIX)) return null;
+  const payload = raw.slice(SHARE_HASH_PREFIX.length);
+  if (!payload) return null;
+  try {
+    return await decodeSharePayload(payload);
+  } catch {
+    return null;
+  }
+}
+
+/** Build `https://host/#v1=...` long share URL. */
+export async function buildShareLongUrl(tree, origin) {
+  const base = String(origin || "").replace(/\/$/, "") || "";
+  const hash = await buildShareHash(tree);
+  return `${base}/${hash}`;
+}
+
+export function preferExternalShorten(urlLength) {
+  return Number(urlLength) <= EXTERNAL_SHORTEN_MAX_LEN;
+}
+
+/**
+ * Shorten via is.gd then v.gd (CORS-friendly, no API key).
+ * @returns {{ shortUrl: string, provider: string }}
+ */
+export async function shortenWithExternal(longUrl, { fetchImpl = globalThis.fetch } = {}) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("当前环境无法请求短链服务");
+  }
+  const target = String(longUrl || "");
+  if (!target) throw new Error("缺少要缩短的链接");
+  const errors = [];
+  for (const provider of SHARE_SHORTEN_PROVIDERS) {
+    try {
+      const api = `${provider.endpoint}?format=json&url=${encodeURIComponent(target)}`;
+      const response = await fetchImpl(api);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (data && typeof data.shorturl === "string" && data.shorturl) {
+        return { shortUrl: data.shorturl, provider: provider.id };
+      }
+      throw new Error((data && data.errormessage) || "无短链返回");
+    } catch (error) {
+      errors.push(`${provider.id}: ${error && error.message ? error.message : error}`);
+    }
+  }
+  throw new Error(errors.join("; ") || "短链失败");
+}
+
+/**
+ * Build long URL, optionally shorten when under length limit.
+ * Always returns longUrl; shortUrl is null when skipped or all providers fail.
+ */
+export async function createShareLinks(tree, origin, { fetchImpl = globalThis.fetch } = {}) {
+  const longUrl = await buildShareLongUrl(tree, origin);
+  if (!preferExternalShorten(longUrl.length)) {
+    return { longUrl, shortUrl: null, provider: null, shortened: false };
+  }
+  try {
+    const { shortUrl, provider } = await shortenWithExternal(longUrl, { fetchImpl });
+    return { longUrl, shortUrl, provider, shortened: true };
+  } catch {
+    return { longUrl, shortUrl: null, provider: null, shortened: false };
+  }
+}
+
 export function parseJsonTree(text) {
   let data;
   try {
