@@ -1644,7 +1644,7 @@
           !!node &&
           node !== tree &&
           canEdit() &&
-          (mode === "select" || mode === "desc")
+          (mode === "select" || mode === "title" || mode === "desc")
         );
       }
 
@@ -2240,15 +2240,12 @@
         const sub = descText(node);
         if (!sub) return;
         const subW = textWidth(sub, "400 " + DESC_SIZE + "px " + sans);
-        const hitY = contentTop + node.style.size;
+        const hitY = contentTop + node.style.size + DESC_GAP;
         const subHit = document.createElementNS(NS, "rect");
-        subHit.setAttribute("x", textX - 4);
+        subHit.setAttribute("x", textX);
         subHit.setAttribute("y", hitY);
-        subHit.setAttribute("width", Math.max(subW, 12) + 8);
-        subHit.setAttribute(
-          "height",
-          Math.max(DESC_SIZE + 6, node.y + node.h - hitY),
-        );
+        subHit.setAttribute("width", Math.max(subW, 1));
+        subHit.setAttribute("height", DESC_SIZE);
         subHit.setAttribute("fill", "transparent");
         subHit.setAttribute("data-field", "desc");
         subHit.addEventListener("pointerdown", (event) => {
@@ -2339,23 +2336,46 @@
           const editPadX = 4;
           const editMinW = 28;
 
+          const bodyHitX = node.x - 10;
+          const bodyHitY = node.y + 2;
+          const bodyHitW = Math.max(bodyW + noteVisualW, 48) + 20;
+          const bodyHitH = node.h - 4;
+
           if (node === selected || isEditingNode || iconNode === node) {
             const sel = document.createElementNS(NS, "rect");
-            sel.setAttribute("x", node.x - 10);
-            sel.setAttribute("y", node.y + 2);
-            sel.setAttribute("width", Math.max(bodyW + noteVisualW, 48) + 20);
-            sel.setAttribute("height", node.h - 4);
+            sel.setAttribute("x", bodyHitX);
+            sel.setAttribute("y", bodyHitY);
+            sel.setAttribute("width", bodyHitW);
+            sel.setAttribute("height", bodyHitH);
             sel.setAttribute("rx", 4);
             sel.setAttribute("fill", "var(--map-sel)");
+            sel.style.pointerEvents = "none";
             group.appendChild(sel);
           }
 
+          if (!isEditingNode) {
+            const bodyHit = document.createElementNS(NS, "rect");
+            bodyHit.setAttribute("x", bodyHitX);
+            bodyHit.setAttribute("y", bodyHitY);
+            bodyHit.setAttribute("width", bodyHitW);
+            bodyHit.setAttribute("height", bodyHitH);
+            bodyHit.setAttribute("fill", "transparent");
+            group.appendChild(bodyHit);
+          }
+
           {
+            const iconCx = node.x + (node.iconW || NODE_ICON_W) / 2 - 1;
+            const hasIcon = !!iconText(node);
+            const iconSize = hasIcon
+              ? Math.max(14, Math.min(18, node.style.size - 2))
+              : 12;
+            // Color emoji paints high in the em box; match hit box to ink.
+            const iconDy = hasIcon ? iconSize * 0.08 : 0;
             const iconHit = document.createElementNS(NS, "rect");
-            iconHit.setAttribute("x", node.x - 2);
-            iconHit.setAttribute("y", node.y + 2);
-            iconHit.setAttribute("width", node.iconW || NODE_ICON_W);
-            iconHit.setAttribute("height", node.h - 4);
+            iconHit.setAttribute("x", iconCx - iconSize / 2);
+            iconHit.setAttribute("y", titleY - iconSize / 2 + iconDy);
+            iconHit.setAttribute("width", iconSize);
+            iconHit.setAttribute("height", iconSize);
             iconHit.setAttribute("fill", "transparent");
             iconHit.style.cursor = "pointer";
             iconHit.addEventListener("pointerdown", (event) => {
@@ -2371,37 +2391,45 @@
             group.appendChild(iconHit);
 
             const iconLabel = document.createElementNS(NS, "text");
-            iconLabel.setAttribute(
-              "x",
-              node.x + (node.iconW || NODE_ICON_W) / 2 - 1,
-            );
+            iconLabel.setAttribute("x", iconCx);
             iconLabel.setAttribute("y", titleY);
             iconLabel.setAttribute("text-anchor", "middle");
             iconLabel.setAttribute("dominant-baseline", "central");
-            const iconSize = Math.max(14, Math.min(18, node.style.size - 2));
             iconLabel.setAttribute("font-size", iconSize);
             iconLabel.style.pointerEvents = "none";
-            if (iconText(node)) {
+            if (hasIcon) {
               iconLabel.textContent = iconText(node);
-              // Color emoji paints high in the em box, above the name's ink.
-              iconLabel.setAttribute("dy", (iconSize * 0.08).toFixed(2));
+              iconLabel.setAttribute("dy", iconDy.toFixed(2));
             } else {
               iconLabel.textContent = "○";
               iconLabel.setAttribute("fill", "var(--map-faint)");
               iconLabel.setAttribute("font-family", sans);
-              iconLabel.setAttribute("font-size", 12);
             }
             group.appendChild(iconLabel);
           }
 
           if (!isEditingNode) {
-            const hit = document.createElementNS(NS, "rect");
-            hit.setAttribute("x", textX - 4);
-            hit.setAttribute("y", node.y);
-            hit.setAttribute("width", Math.max(node.labelW, 12) + 8);
-            hit.setAttribute("height", node.h);
-            hit.setAttribute("fill", "transparent");
-            group.appendChild(hit);
+            const titleW = textWidth(
+              node.title || " ",
+              node.style.weight +
+                " " +
+                node.style.size +
+                "px " +
+                node.style.family,
+            );
+            const titleHit = document.createElementNS(NS, "rect");
+            titleHit.setAttribute("x", textX);
+            titleHit.setAttribute("y", contentTop);
+            titleHit.setAttribute("width", Math.max(titleW, 1));
+            titleHit.setAttribute("height", node.style.size);
+            titleHit.setAttribute("fill", "transparent");
+            titleHit.setAttribute("data-field", "title");
+            titleHit.addEventListener("pointerdown", (event) => {
+              event.stopPropagation();
+              if (isSecondaryPointer(event)) return;
+              armDrag(event, node, "title");
+            });
+            group.appendChild(titleHit);
 
             const label = document.createElementNS(NS, "text");
             label.setAttribute("x", textX);
@@ -2411,6 +2439,7 @@
             label.setAttribute("font-family", node.style.family);
             label.setAttribute("font-size", node.style.size);
             label.setAttribute("font-weight", node.style.weight);
+            label.style.pointerEvents = "none";
             label.textContent = node.title;
             group.appendChild(label);
 
@@ -2948,7 +2977,7 @@
             selected = drag.node;
             relayout(drag.node);
             saveLocal();
-          } else if (drag.mode === "select" || drag.mode === "desc") {
+          } else if (drag.mode === "title" || drag.mode === "desc") {
             const field = drag.mode === "desc" ? "desc" : "title";
             hideCtxMenu();
             if (!canEdit()) {
@@ -2957,6 +2986,10 @@
             } else {
               beginEdit(drag.node, field);
             }
+          } else if (drag.mode === "select") {
+            hideCtxMenu();
+            selected = drag.node;
+            draw();
           }
         } else if (drag && !drag.moved && !drag.node) {
           selected = null;
