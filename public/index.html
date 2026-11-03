@@ -1628,7 +1628,9 @@
         createLocalStore,
         createRecentIconsStore,
         createShareLinks,
+        decodeSharePayload,
         EXTERNAL_SHORTEN_MAX_LEN,
+        fetchSharePayload,
         fontStacksFor,
         searchEmojis,
         nodeAtPath,
@@ -1636,6 +1638,7 @@
         pageTitleOf,
         parseImportFile,
         parseShareHash,
+        parseShareIdFromSearch,
         isImportableFile,
         looksLikeOutlinePaste,
         parseOutlinePaste,
@@ -1652,7 +1655,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103e";
+      } from "./mm-core.js?v=20261103f";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -2006,12 +2009,17 @@
         shareBanner.classList.toggle("show", shareGuest);
       }
 
-      function clearShareHashFromUrl() {
-        if (!location.hash.startsWith("#v1=")) return;
+      function clearShareParamsFromUrl() {
+        const params = new URLSearchParams(location.search);
+        const hadShareQuery = params.has("s");
+        if (hadShareQuery) params.delete("s");
+        const search = params.toString();
+        const hash = location.hash.startsWith("#v1=") ? "" : location.hash;
+        if (!hadShareQuery && hash === location.hash) return;
         history.replaceState(
           null,
           "",
-          `${location.pathname}${location.search}`,
+          `${location.pathname}${search ? `?${search}` : ""}${hash}`,
         );
       }
 
@@ -2022,7 +2030,7 @@
         }
         shareGuest = false;
         syncShareBanner();
-        clearShareHashFromUrl();
+        clearShareParamsFromUrl();
         saveLocal();
         if (switchToEdit) setAppMode("edit");
         toast("已保存到本机");
@@ -2063,7 +2071,7 @@
         if (next === "edit" && shareGuest) {
           shareGuest = false;
           syncShareBanner();
-          clearShareHashFromUrl();
+          clearShareParamsFromUrl();
           // Persist before mode chrome updates so later saveLocal calls work.
           store.save(fileName, tree);
           toast("已保存到本机");
@@ -4142,7 +4150,7 @@
         hideIconPop();
         shareGuest = false;
         syncShareBanner();
-        clearShareHashFromUrl();
+        clearShareParamsFromUrl();
         loadTree(cloneData(DEMO), "mindmap.md", true, { persist: false });
         history.clear();
         store.clear();
@@ -4285,13 +4293,12 @@
             shortUrl: result.shortUrl || "",
           };
           shareLongUrl.placeholder = "";
-          if (result.shortened && result.shortUrl) {
-            shareShortUrl.placeholder = "";
-          } else if (result.longUrl.length > EXTERNAL_SHORTEN_MAX_LEN) {
-            shareShortUrl.placeholder = "导图过大，请用长链";
-          } else {
-            shareShortUrl.placeholder = "短链不可用";
-          }
+          shareShortUrl.placeholder =
+            result.shortened && result.shortUrl
+              ? ""
+              : result.longUrl.length > EXTERNAL_SHORTEN_MAX_LEN
+                ? "导图过大，请用长链"
+                : "短链不可用";
           syncShareModalFields();
           shareCopyLong.disabled = !shareLinks.longUrl;
           shareLongUrl.focus();
@@ -4474,9 +4481,7 @@
         if (event.target === downloadModal) closeDownload();
       });
 
-      const shareHashRaw = String(location.hash || "").replace(/^#/, "");
-      const sharedTree = await parseShareHash(location.hash);
-      if (sharedTree) {
+      async function openSharedTree(sharedTree) {
         shareGuest = true;
         tree = sharedTree;
         fileName = `${(sharedTree.title || "mindmap").replace(/[\\/:*?"<>|]+/g, "-").trim() || "mindmap"}.md`;
@@ -4487,10 +4492,29 @@
         writeAppMode(appMode);
         syncShareBanner();
         toast("只读分享 · 可保存副本");
-      } else {
-        if (shareHashRaw.startsWith("v1=")) {
-          toast("分享链接无效或已损坏");
+      }
+
+      const shareHashRaw = String(location.hash || "").replace(/^#/, "");
+      const sharedFromHash = await parseShareHash(location.hash);
+      const shareId = parseShareIdFromSearch(location.search);
+      let openedShare = false;
+      if (sharedFromHash) {
+        await openSharedTree(sharedFromHash);
+        openedShare = true;
+      } else if (shareId) {
+        try {
+          const payload = await fetchSharePayload(shareId);
+          const sharedFromShort = await decodeSharePayload(payload);
+          await openSharedTree(sharedFromShort);
+          openedShare = true;
+        } catch (error) {
+          toast(error.message || "短链打开失败");
         }
+      } else if (shareHashRaw.startsWith("v1=")) {
+        toast("分享链接无效或已损坏");
+      }
+
+      if (!openedShare) {
         const cached = store.load();
         if (cached) {
           tree = cached.tree;

@@ -3,7 +3,7 @@
  *
  * JS modules must be network-first: cache-first + pathname keys can pair a fresh
  * index.html with a stale mm-core.js after deploy (missing named exports). */
-const CACHE = "mm-20261103e";
+const CACHE = "mm-20261103f";
 const ASSETS = [
   "/",
   "/index.html",

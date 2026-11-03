@@ -20,7 +20,7 @@
 - **画布上直接改**：单击改标题 / 副标题，点前导 emoji 换图标，右键或长按打开菜单
 - **只读 / 编辑**：工具栏一键切换；编辑模式支持 Tab 子节点、Enter 同级、撤销重做
 - **导入导出**：拖放或工具栏导入 `.md`；导出 Markdown · XMind · 交互 HTML · OPML · JSON
-- **链接分享**：菜单「分享」生成 `#v1=…` 长链（导图压缩进 URL）；较短时再经 is.gd / v.gd 生成短链
+- **链接分享**：菜单「分享」生成 `#v1=…` 长链；优先经 [s.wenfu.dev](https://s.wenfu.dev/)（仓库 [vvenv/short](https://github.com/vvenv/short)）建短链，失败再试 is.gd / v.gd
 - **剪贴板**：复制 / 剪切 / 粘贴大纲文本，可把 Markdown 列表粘成树状分支
 - **本地自动保存**：内容与偏好（主题、字体、模式）写在浏览器 `localStorage`，不上传服务器
 - **PWA 离线**：首次打开后可安装到主屏幕，断网也能用
@@ -34,11 +34,12 @@
 
 菜单 → **分享** 会生成可打开的链接：
 
-- **长链**：`https://mm.wenfu.dev/#v1=…`，载荷在 URL hash 里（deflate 压缩），打开本站即可只读查看；刷新时 hash 不会进服务器访问日志
-- **短链**：长链不太长时，浏览器直连 is.gd（失败再试 v.gd）缩短；过大或短链服务不可用时仍可复制长链
+- **长链**：`https://mm.wenfu.dev/#v1=…`，载荷在 URL hash 里（deflate 压缩）；hash 不进 nginx 访问日志
+- **短链（优先）**：`https://s.wenfu.dev/<id>` → 302 到 `mm.wenfu.dev/?s=<id>`，再由前端拉取载荷；服务端实现见独立仓库 [vvenv/short](https://github.com/vvenv/short)
+- **短链（备选）**：第一方不可用且长链不太长时，再试 is.gd / v.gd
 - 对方打开后为只读，不写入其 `localStorage`；点「保存副本」或切到编辑后才会存到本机
 
-隐私：长链把内容放在 URL 里，任何拿到链接的人都能还原导图；短链提供商会看到完整目标 URL（含 hash）。本站服务器不存储分享内容。
+隐私：长链内容在 URL 里；第一方短链的压缩载荷存在 `s.wenfu.dev` 服务器磁盘；外部短链提供商会看到完整目标 URL。
 
 ### Markdown 约定
 

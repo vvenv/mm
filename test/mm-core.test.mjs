@@ -19,6 +19,7 @@ import {
   createShareLinks,
   decodeSharePayload,
   encodeSharePayload,
+  parseShareIdFromSearch,
   searchEmojis,
   formatListLabel,
   nodeAtPath,
@@ -36,6 +37,7 @@ import {
   parseShareHash,
   preferExternalShorten,
   parseMarkdown,
+  shortenWithBuiltin,
   shortenWithExternal,
   parseImportFile,
   parseJsonTree,
@@ -714,18 +716,41 @@ test("share payload round-trips through #v1= hash", async () => {
   assert.equal(preferExternalShorten(EXTERNAL_SHORTEN_MAX_LEN + 1), false);
 });
 
-test("createShareLinks shortens when under limit and falls back on failure", async () => {
+test("createShareLinks prefers builtin short then external then long-only", async () => {
   const tree = { title: "Hi", children: [{ title: "A", children: [] }] };
-  const ok = await createShareLinks(tree, "https://mm.wenfu.dev", {
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ shorturl: "https://is.gd/abc" }),
-    }),
+
+  const builtin = await createShareLinks(tree, "https://mm.wenfu.dev", {
+    fetchImpl: async (url, init) => {
+      assert.match(String(url), /\/api$/);
+      assert.equal(init.method, "POST");
+      return {
+        ok: true,
+        json: async () => ({ id: "Ab12Cd34", url: "https://s.wenfu.dev/Ab12Cd34" }),
+      };
+    },
   });
-  assert.equal(ok.shortened, true);
-  assert.equal(ok.shortUrl, "https://is.gd/abc");
-  assert.equal(ok.provider, "isgd");
-  assert.match(ok.longUrl, /^https:\/\/mm\.wenfu\.dev\/#v1=/);
+  assert.equal(builtin.shortened, true);
+  assert.equal(builtin.shortUrl, "https://s.wenfu.dev/Ab12Cd34");
+  assert.equal(builtin.provider, "swenfu");
+  assert.match(builtin.longUrl, /^https:\/\/mm\.wenfu\.dev\/#v1=/);
+
+  let calls = 0;
+  const external = await createShareLinks(tree, "https://mm.wenfu.dev", {
+    fetchImpl: async (url) => {
+      calls += 1;
+      if (String(url).includes("s.wenfu.dev")) {
+        return { ok: false, status: 503, json: async () => ({ error: "down" }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ shorturl: "https://is.gd/abc" }),
+      };
+    },
+  });
+  assert.equal(external.shortened, true);
+  assert.equal(external.shortUrl, "https://is.gd/abc");
+  assert.equal(external.provider, "isgd");
+  assert.ok(calls >= 2);
 
   const fail = await createShareLinks(tree, "https://mm.wenfu.dev", {
     fetchImpl: async () => {
@@ -735,6 +760,18 @@ test("createShareLinks shortens when under limit and falls back on failure", asy
   assert.equal(fail.shortened, false);
   assert.equal(fail.shortUrl, null);
   assert.match(fail.longUrl, /^https:\/\/mm\.wenfu\.dev\/#v1=/);
+
+  assert.equal(parseShareIdFromSearch("?s=Ab12Cd34"), "Ab12Cd34");
+  assert.equal(parseShareIdFromSearch("?s=!!"), null);
+
+  const built = await shortenWithBuiltin("abcPAYLOAD", {
+    apiOrigin: "https://s.wenfu.dev",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ id: "x", url: "https://s.wenfu.dev/x" }),
+    }),
+  });
+  assert.equal(built.provider, "swenfu");
 
   await assert.rejects(
     () =>

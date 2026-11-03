@@ -1182,13 +1182,17 @@ export function normalizeImportedTree(data) {
 
 /** Share payload lives in the URL hash: `#v1=<base64url(deflate-raw(json))>`. */
 export const SHARE_HASH_PREFIX = "v1=";
-/** External shorteners usually reject very long destinations; above this, keep the long URL. */
+/** First-party short-link API (public repo: vvenv/short). */
+export const SHARE_API_ORIGIN = "https://s.wenfu.dev";
+/** External shorteners usually reject very long destinations; above this, skip them. */
 export const EXTERNAL_SHORTEN_MAX_LEN = 3500;
 
 const SHARE_SHORTEN_PROVIDERS = [
   { id: "isgd", endpoint: "https://is.gd/create.php" },
   { id: "vgd", endpoint: "https://v.gd/create.php" },
 ];
+
+const SHARE_ID_RE = /^[A-Za-z0-9_-]{4,32}$/;
 
 function bytesToBase64Url(bytes) {
   let binary = "";
@@ -1272,6 +1276,71 @@ export function preferExternalShorten(urlLength) {
   return Number(urlLength) <= EXTERNAL_SHORTEN_MAX_LEN;
 }
 
+/** Read `?s=<id>` from a search string. */
+export function parseShareIdFromSearch(search) {
+  const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+  const id = params.get("s");
+  return id && SHARE_ID_RE.test(id) ? id : null;
+}
+
+/**
+ * Create a first-party short link via s.wenfu.dev.
+ * @returns {{ shortUrl: string, provider: string, id: string }}
+ */
+export async function shortenWithBuiltin(
+  payload,
+  { apiOrigin = SHARE_API_ORIGIN, fetchImpl = globalThis.fetch } = {},
+) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("当前环境无法请求短链服务");
+  }
+  const body = String(payload || "");
+  if (!body) throw new Error("缺少分享载荷");
+  const base = String(apiOrigin || SHARE_API_ORIGIN).replace(/\/$/, "");
+  const response = await fetchImpl(`${base}/api`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payload: body }),
+  });
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const err = await response.json();
+      if (err && err.error) detail = err.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  const data = await response.json();
+  if (!data || typeof data.url !== "string" || !data.url) {
+    throw new Error("无短链返回");
+  }
+  return { shortUrl: data.url, provider: "swenfu", id: data.id || "" };
+}
+
+/** Fetch a stored share payload by short id. */
+export async function fetchSharePayload(
+  id,
+  { apiOrigin = SHARE_API_ORIGIN, fetchImpl = globalThis.fetch } = {},
+) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("当前环境无法请求短链服务");
+  }
+  if (!SHARE_ID_RE.test(String(id || ""))) {
+    throw new Error("无效的短链 id");
+  }
+  const base = String(apiOrigin || SHARE_API_ORIGIN).replace(/\/$/, "");
+  const response = await fetchImpl(`${base}/api/${encodeURIComponent(id)}`);
+  if (response.status === 404) throw new Error("短链不存在或已失效");
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  if (!data || typeof data.payload !== "string" || !data.payload) {
+    throw new Error("无效的短链载荷");
+  }
+  return data.payload;
+}
+
 /**
  * Shorten via is.gd then v.gd (CORS-friendly, no API key).
  * @returns {{ shortUrl: string, provider: string }}
@@ -1301,20 +1370,39 @@ export async function shortenWithExternal(longUrl, { fetchImpl = globalThis.fetc
 }
 
 /**
- * Build long URL, optionally shorten when under length limit.
- * Always returns longUrl; shortUrl is null when skipped or all providers fail.
+ * Build long URL, then prefer first-party short link; fall back to external / long-only.
+ * Always returns longUrl; shortUrl is null when all shorteners fail.
  */
-export async function createShareLinks(tree, origin, { fetchImpl = globalThis.fetch } = {}) {
+export async function createShareLinks(
+  tree,
+  origin,
+  { fetchImpl = globalThis.fetch, shareApiOrigin = SHARE_API_ORIGIN } = {},
+) {
+  const payload = await encodeSharePayload(tree);
   const longUrl = await buildShareLongUrl(tree, origin);
-  if (!preferExternalShorten(longUrl.length)) {
-    return { longUrl, shortUrl: null, provider: null, shortened: false };
-  }
   try {
-    const { shortUrl, provider } = await shortenWithExternal(longUrl, { fetchImpl });
-    return { longUrl, shortUrl, provider, shortened: true };
+    const built = await shortenWithBuiltin(payload, {
+      apiOrigin: shareApiOrigin,
+      fetchImpl,
+    });
+    return {
+      longUrl,
+      shortUrl: built.shortUrl,
+      provider: built.provider,
+      shortened: true,
+    };
   } catch {
-    return { longUrl, shortUrl: null, provider: null, shortened: false };
+    /* fall through */
   }
+  if (preferExternalShorten(longUrl.length)) {
+    try {
+      const { shortUrl, provider } = await shortenWithExternal(longUrl, { fetchImpl });
+      return { longUrl, shortUrl, provider, shortened: true };
+    } catch {
+      /* fall through */
+    }
+  }
+  return { longUrl, shortUrl: null, provider: null, shortened: false };
 }
 
 export function parseJsonTree(text) {
