@@ -1692,12 +1692,6 @@
         return { type: "child", target: best };
       }
 
-      function sameDrop(a, b) {
-        if (!a && !b) return true;
-        if (!a || !b) return false;
-        return a.type === b.type && a.target === b.target;
-      }
-
       function moveNodeToDrop(node, drop) {
         if (!node || !drop || !drop.target || node === tree || !canEdit())
           return false;
@@ -2701,21 +2695,28 @@
 
         visit(tree);
         if (drag && drag.kind === "node" && drag.node) {
-          const overlay = document.createElementNS(NS, "g");
-          overlay.setAttribute("data-drag-ui", "1");
-          paintDragOverlay(
-            overlay,
-            drag.node,
-            drag.drop,
-            drag.wx,
-            drag.wy,
-            drag.grabDX,
-            drag.grabDY,
-          );
-          viewport.appendChild(overlay);
+          refreshDragOverlay();
         }
         apply();
         updateChrome();
+      }
+
+      function refreshDragOverlay() {
+        const old = viewport.querySelector("[data-drag-ui]");
+        if (old) old.remove();
+        if (!drag || drag.kind !== "node" || !drag.node) return;
+        const overlay = document.createElementNS(NS, "g");
+        overlay.setAttribute("data-drag-ui", "1");
+        paintDragOverlay(
+          overlay,
+          drag.node,
+          drag.drop,
+          drag.wx,
+          drag.wy,
+          drag.grabDX,
+          drag.grabDY,
+        );
+        viewport.appendChild(overlay);
       }
 
       function apply() {
@@ -2756,8 +2757,11 @@
         if (!pair) return;
         clearLongPress();
         hideCtxMenu();
+        const wasNodeDrag = drag && drag.kind === "node";
         drag = null;
+        svg.classList.remove("node-dragging");
         svg.classList.add("dragging");
+        if (wasNodeDrag) draw();
         const [a, b] = pair;
         const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
         pinch = {
@@ -2813,6 +2817,12 @@
           moved: false,
           node,
           mode,
+          kind: "pan",
+          drop: null,
+          wx: 0,
+          wy: 0,
+          grabDX: 0,
+          grabDY: 0,
           pointerId: event.pointerId,
         };
       }
@@ -2840,9 +2850,37 @@
         const dx = event.clientX - drag.x;
         const dy = event.clientY - drag.y;
         if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+        const firstMove = !drag.moved;
         drag.moved = true;
         clearLongPress();
         hideCtxMenu();
+
+        if (firstMove && canStartNodeDrag(drag.node, drag.mode)) {
+          const world = clientToWorld(event.clientX, event.clientY);
+          drag.kind = "node";
+          drag.wx = world.x;
+          drag.wy = world.y;
+          drag.grabDX = world.x - drag.node.x;
+          drag.grabDY = world.y - drag.node.y;
+          drag.drop = findDropTarget(world.x, world.y, drag.node);
+          selected = drag.node;
+          hideNotePop({ save: false });
+          hideIconPop();
+          svg.classList.add("node-dragging");
+          svg.classList.remove("dragging");
+          draw();
+          return;
+        }
+
+        if (drag.kind === "node") {
+          const world = clientToWorld(event.clientX, event.clientY);
+          drag.wx = world.x;
+          drag.wy = world.y;
+          drag.drop = findDropTarget(world.x, world.y, drag.node);
+          refreshDragOverlay();
+          return;
+        }
+
         svg.classList.add("dragging");
         tx = drag.tx + dx;
         ty = drag.ty + dy;
@@ -2864,6 +2902,7 @@
           pinch = null;
           drag = null;
           svg.classList.remove("dragging");
+          svg.classList.remove("node-dragging");
           if (activePointers.size === 1) {
             const [id, pt] = activePointers.entries().next().value;
             drag = {
@@ -2874,6 +2913,12 @@
               moved: true,
               node: null,
               mode: "pan",
+              kind: "pan",
+              drop: null,
+              wx: 0,
+              wy: 0,
+              grabDX: 0,
+              grabDY: 0,
               pointerId: id,
             };
           }
@@ -2884,6 +2929,16 @@
           suppressNextTap = false;
           drag = null;
           svg.classList.remove("dragging");
+          svg.classList.remove("node-dragging");
+          return;
+        }
+        if (drag && drag.moved && drag.kind === "node") {
+          const drop = drag.drop;
+          const node = drag.node;
+          drag = null;
+          svg.classList.remove("dragging");
+          svg.classList.remove("node-dragging");
+          if (!moveNodeToDrop(node, drop)) draw();
           return;
         }
         if (drag && !drag.moved && drag.node) {
@@ -2910,6 +2965,7 @@
         }
         drag = null;
         svg.classList.remove("dragging");
+        svg.classList.remove("node-dragging");
       }
       svg.addEventListener("pointerup", endDrag);
       svg.addEventListener("pointercancel", (event) => {
@@ -2920,8 +2976,11 @@
           activePointers.clear();
         }
         pinch = null;
+        const wasNodeDrag = drag && drag.kind === "node";
         drag = null;
         svg.classList.remove("dragging");
+        svg.classList.remove("node-dragging");
+        if (wasNodeDrag) draw();
       });
       svg.addEventListener("contextmenu", (event) => {
         event.preventDefault();
