@@ -85,6 +85,8 @@
         --map-paper-active: #eee;
         --map-paper-stroke: #666;
         --map-mark-fill: #fff;
+        --map-drop: #111;
+        --map-drop-fill: rgba(17, 17, 17, 0.08);
         --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
       }
       [data-theme="dark"] {
@@ -132,6 +134,8 @@
         --map-paper-active: #2a2a2a;
         --map-paper-stroke: #888;
         --map-mark-fill: #121212;
+        --map-drop: #e8e8e8;
+        --map-drop-fill: rgba(232, 232, 232, 0.12);
         --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
       }
       html,
@@ -159,6 +163,12 @@
         cursor: grab;
       }
       svg.dragging {
+        cursor: grabbing;
+      }
+      svg.node-dragging {
+        cursor: grabbing;
+      }
+      svg.node-dragging [data-node-path] {
         cursor: grabbing;
       }
       .toolbar {
@@ -1203,7 +1213,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103a";
+      } from "./mm-core.js?v=20261103b";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1610,6 +1620,209 @@
           if (found) return found;
         }
         return null;
+      }
+
+      function isDescendantOf(node, ancestor) {
+        if (!node || !ancestor) return false;
+        if (node === ancestor) return true;
+        for (let i = 0; i < ancestor.children.length; i++) {
+          if (isDescendantOf(node, ancestor.children[i])) return true;
+        }
+        return false;
+      }
+
+      function clientToWorld(clientX, clientY) {
+        const rect = svg.getBoundingClientRect();
+        return {
+          x: (clientX - rect.left - tx) / scale,
+          y: (clientY - rect.top - ty) / scale,
+        };
+      }
+
+      function canStartNodeDrag(node, mode) {
+        return (
+          !!node &&
+          node !== tree &&
+          canEdit() &&
+          (mode === "select" || mode === "desc")
+        );
+      }
+
+      function findDropTarget(wx, wy, dragged) {
+        if (!dragged || !tree) return null;
+        let best = null;
+        let bestDist = Infinity;
+
+        function visit(node) {
+          if (node === dragged) return;
+          if (!node.style) {
+            if (node.open) node.children.forEach(visit);
+            return;
+          }
+          const padX = 28;
+          const padY = Math.max(GAP_Y, 14);
+          const left = node.x - padX;
+          const right = node.x + node.w + GAP_X;
+          const top = node.y - padY;
+          const bottom = node.y + node.h + padY;
+          if (wx >= left && wx <= right && wy >= top && wy <= bottom) {
+            const cx = node.x + node.w / 2;
+            const cy = node.y + node.h / 2;
+            const dist = Math.hypot(wx - cx, wy - cy);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = node;
+            }
+          }
+          if (node.open) node.children.forEach(visit);
+        }
+
+        visit(tree);
+        if (!best) return null;
+        if (isDescendantOf(best, dragged)) return null;
+
+        if (best === tree) {
+          return { type: "child", target: best };
+        }
+
+        const relY = (wy - best.y) / Math.max(best.h, 1);
+        const towardChild = wx > best.x + best.w * 0.62;
+        if (!towardChild && relY < 0.32) return { type: "before", target: best };
+        if (!towardChild && relY > 0.68) return { type: "after", target: best };
+        return { type: "child", target: best };
+      }
+
+      function sameDrop(a, b) {
+        if (!a && !b) return true;
+        if (!a || !b) return false;
+        return a.type === b.type && a.target === b.target;
+      }
+
+      function moveNodeToDrop(node, drop) {
+        if (!node || !drop || !drop.target || node === tree || !canEdit())
+          return false;
+        if (node === drop.target || isDescendantOf(drop.target, node))
+          return false;
+
+        const info = locate(node);
+        if (!info || !info.parent) return false;
+
+        let newParent;
+        let newIndex;
+        if (drop.type === "child") {
+          newParent = drop.target;
+          newIndex = newParent.children.length;
+        } else {
+          const tInfo = locate(drop.target);
+          if (!tInfo || !tInfo.parent) return false;
+          newParent = tInfo.parent;
+          newIndex = drop.type === "before" ? tInfo.index : tInfo.index + 1;
+        }
+
+        if (isDescendantOf(newParent, node) || newParent === node) return false;
+
+        if (info.parent === newParent) {
+          if (info.index < newIndex) newIndex -= 1;
+          if (newIndex === info.index) return false;
+        }
+
+        pushHistory();
+        info.parent.children.splice(info.index, 1);
+        newParent.children.splice(newIndex, 0, node);
+        newParent.open = true;
+        refreshDepth(tree, 0);
+        selected = node;
+        editing = false;
+        editInput = null;
+        editBaseline = null;
+        relayout(node);
+        saveLocal();
+        return true;
+      }
+
+      function paintDragOverlay(layer, dragged, drop, wx, wy, grabDX, grabDY) {
+        if (!dragged || !dragged.style) return;
+        const gx = wx - grabDX;
+        const gy = wy - grabDY;
+        const ghost = document.createElementNS(NS, "g");
+        ghost.setAttribute("opacity", "0.55");
+        ghost.style.pointerEvents = "none";
+        const bodyW = (dragged.iconW || 0) + dragged.labelW;
+        const noteVisualW = dragged.noteW ? 16 : 0;
+        const bg = document.createElementNS(NS, "rect");
+        bg.setAttribute("x", gx - 10);
+        bg.setAttribute("y", gy + 2);
+        bg.setAttribute("width", Math.max(bodyW + noteVisualW, 48) + 20);
+        bg.setAttribute("height", dragged.h - 4);
+        bg.setAttribute("rx", 4);
+        bg.setAttribute("fill", "var(--map-sel)");
+        ghost.appendChild(bg);
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", gx + (dragged.iconW || 0));
+        label.setAttribute("y", gy + dragged.h / 2);
+        label.setAttribute("dominant-baseline", "central");
+        label.setAttribute("fill", dragged.style.fill);
+        label.setAttribute("font-family", dragged.style.family);
+        label.setAttribute("font-size", dragged.style.size);
+        label.setAttribute("font-weight", dragged.style.weight);
+        label.textContent = dragged.title || " ";
+        ghost.appendChild(label);
+        layer.appendChild(ghost);
+
+        if (!drop || !drop.target || !drop.target.style) return;
+        const target = drop.target;
+        if (drop.type === "child") {
+          const body = (target.iconW || 0) + target.labelW;
+          const noteW = target.noteW ? 16 : 0;
+          const hl = document.createElementNS(NS, "rect");
+          hl.setAttribute("x", target.x - 10);
+          hl.setAttribute("y", target.y + 2);
+          hl.setAttribute("width", Math.max(body + noteW, 48) + 20);
+          hl.setAttribute("height", target.h - 4);
+          hl.setAttribute("rx", 4);
+          hl.setAttribute("fill", "var(--map-drop-fill)");
+          hl.setAttribute("stroke", "var(--map-drop)");
+          hl.setAttribute("stroke-width", 1.4);
+          hl.setAttribute("stroke-dasharray", "4 3");
+          hl.style.pointerEvents = "none";
+          layer.appendChild(hl);
+          const tip = document.createElementNS(NS, "circle");
+          tip.setAttribute("cx", target.x + target.w + 10);
+          tip.setAttribute("cy", target.y + target.h / 2);
+          tip.setAttribute("r", 4);
+          tip.setAttribute("fill", "var(--map-drop)");
+          tip.style.pointerEvents = "none";
+          layer.appendChild(tip);
+          return;
+        }
+
+        const y =
+          drop.type === "before"
+            ? target.y - 4
+            : target.y + target.h + 4;
+        const line = document.createElementNS(NS, "path");
+        line.setAttribute(
+          "d",
+          "M " +
+            (target.x - 6) +
+            " " +
+            y +
+            " H " +
+            (target.x + Math.max(target.w, 40) + 6),
+        );
+        line.setAttribute("stroke", "var(--map-drop)");
+        line.setAttribute("stroke-width", 2.2);
+        line.setAttribute("stroke-linecap", "round");
+        line.setAttribute("fill", "none");
+        line.style.pointerEvents = "none";
+        layer.appendChild(line);
+        const cap = document.createElementNS(NS, "circle");
+        cap.setAttribute("cx", target.x - 6);
+        cap.setAttribute("cy", y);
+        cap.setAttribute("r", 3.2);
+        cap.setAttribute("fill", "var(--map-drop)");
+        cap.style.pointerEvents = "none";
+        layer.appendChild(cap);
       }
 
       function updateChrome() {
@@ -2109,6 +2322,13 @@
             "data-node-path",
             nodePath ? nodePath.join(",") : "",
           );
+          if (
+            drag &&
+            drag.kind === "node" &&
+            (node === drag.node || isDescendantOf(node, drag.node))
+          ) {
+            group.setAttribute("opacity", "0.28");
+          }
           const isEditingNode = editing && node === selected;
           const showSub = nodeShowsSubtitle(node);
           const layoutHasSub = node.h > node.style.h;
@@ -2480,6 +2700,20 @@
         }
 
         visit(tree);
+        if (drag && drag.kind === "node" && drag.node) {
+          const overlay = document.createElementNS(NS, "g");
+          overlay.setAttribute("data-drag-ui", "1");
+          paintDragOverlay(
+            overlay,
+            drag.node,
+            drag.drop,
+            drag.wx,
+            drag.wy,
+            drag.grabDX,
+            drag.grabDY,
+          );
+          viewport.appendChild(overlay);
+        }
         apply();
         updateChrome();
       }
