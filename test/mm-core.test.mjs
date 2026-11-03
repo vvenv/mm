@@ -50,8 +50,11 @@ import {
   parseOpml,
   parseInteractiveHtml,
   detectImportFormat,
+  fetchSharePayload,
   isImportableFile,
   looksLikeOutlinePaste,
+  normalizeImportedTree,
+  pageTitleOf,
   parseOutlinePaste,
   subtreeToOutline,
   readAppMode,
@@ -856,4 +859,98 @@ test("createShareLinks prefers builtin short then external then long-only", asyn
       }),
     /isgd:|vgd:/,
   );
+});
+
+test("pageTitleOf joins title and subtitle", () => {
+  assert.equal(pageTitleOf({ title: "Root" }), "Root");
+  assert.equal(pageTitleOf({ title: "Root", desc: "副标题" }), "Root · 副标题");
+  assert.equal(pageTitleOf({ title: "Root", desc: "" }), "Root");
+});
+
+test("normalizeImportedTree cleans nested JSON and rejects invalid roots", () => {
+  const tree = normalizeImportedTree({
+    title: 42,
+    desc: "副",
+    note: "备",
+    icon: "  🗺️  ",
+    open: true,
+    extra: "drop-me",
+    children: [
+      { title: "A", children: [{ title: "A1" }] },
+      { title: "B", children: "nope" },
+    ],
+  });
+  assert.equal(tree.title, "42");
+  assert.equal(tree.desc, "副");
+  assert.equal(tree.note, "备");
+  assert.equal(tree.icon, "🗺️");
+  assert.equal(tree.open, true);
+  assert.equal("extra" in tree, false);
+  assert.equal(tree.children[0].title, "A");
+  assert.equal(tree.children[0].children[0].title, "A1");
+  assert.deepEqual(tree.children[1].children, []);
+  assert.equal(normalizeImportedTree({}).title, "Mindmap");
+  assert.throws(() => normalizeImportedTree(null), /无效的导图 JSON/);
+  assert.throws(() => normalizeImportedTree([]), /无效的导图 JSON/);
+  assert.throws(() => normalizeImportedTree("x"), /无效的导图 JSON/);
+});
+
+test("fetchSharePayload loads payload by short id", async () => {
+  const payload = await fetchSharePayload("Ab12Cd34", {
+    apiOrigin: "https://s.wenfu.dev/",
+    fetchImpl: async (url) => {
+      assert.equal(url, "https://s.wenfu.dev/api/Ab12Cd34");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ payload: "abcPAYLOAD" }),
+      };
+    },
+  });
+  assert.equal(payload, "abcPAYLOAD");
+
+  await assert.rejects(
+    () => fetchSharePayload("!!", { fetchImpl: async () => ({ ok: true }) }),
+    /无效的短链 id/,
+  );
+  await assert.rejects(
+    () =>
+      fetchSharePayload("Ab12Cd34", {
+        fetchImpl: async () => ({
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        }),
+      }),
+    /短链不存在或已失效/,
+  );
+  await assert.rejects(
+    () =>
+      fetchSharePayload("Ab12Cd34", {
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ payload: "" }),
+        }),
+      }),
+    /无效的短链载荷/,
+  );
+});
+
+test("public shell wires app.js and keeps cache versions in sync", () => {
+  const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
+  const sw = fs.readFileSync(path.join(publicDir, "sw.js"), "utf8");
+
+  assert.match(html, /<script type="module" src="\.\/app\.js\?v=([^"]+)"><\/script>/);
+  assert.equal(/<script type="module">/.test(html), false);
+  assert.match(html, /mm\.wenfu\.dev\/theme/);
+
+  const appVer = html.match(/src="\.\/app\.js\?v=([^"]+)"/)[1];
+  const coreVer = app.match(/from "\.\/mm-core\.js\?v=([^"]+)"/)[1];
+  const cache = sw.match(/const CACHE = "mm-([^"]+)"/)[1];
+  assert.equal(appVer, coreVer);
+  assert.equal(appVer, cache);
+  assert.match(sw, /"\/app\.js"/);
+  assert.match(sw, /"\/mm-core\.js"/);
 });
