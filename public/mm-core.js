@@ -1306,6 +1306,40 @@ export function takeShareExit(storage = globalThis.sessionStorage) {
   return true;
 }
 
+/** Links the page was opened with. Payload is kept verbatim so the long URL does not change. */
+export function inboundShareLinks({
+  id = "",
+  payload = "",
+  hash = "",
+  origin = "",
+  apiOrigin = SHARE_API_ORIGIN,
+} = {}) {
+  const base = String(origin || "").replace(/\/$/, "");
+  const rawHash = String(hash || "").replace(/^#/, "");
+  const body = String(payload || "");
+  let longUrl = "";
+  if (body) longUrl = `${base}/#${SHARE_HASH_PREFIX}${body}`;
+  else if (rawHash.startsWith(SHARE_HASH_PREFIX) && rawHash.length > SHARE_HASH_PREFIX.length) {
+    longUrl = `${base}/#${rawHash}`;
+  }
+  let shortUrl = "";
+  if (id && SHARE_ID_RE.test(String(id))) {
+    const api = String(apiOrigin || SHARE_API_ORIGIN).replace(/\/$/, "");
+    shortUrl = `${api}/${id}`;
+  }
+  if (!longUrl && !shortUrl) return null;
+  return { longUrl, shortUrl };
+}
+
+/** Same tree as the link already issued: hand that link back instead of minting another. */
+export function reuseUnchangedShare(saved, snapshot) {
+  if (!saved || saved.snapshot !== snapshot) return null;
+  const longUrl = saved.longUrl || "";
+  const shortUrl = saved.shortUrl || "";
+  if (!longUrl && !shortUrl) return null;
+  return { longUrl, shortUrl };
+}
+
 /**
  * Create a first-party short link via s.wenfu.dev.
  * @returns {{ shortUrl: string, provider: string, id: string }}

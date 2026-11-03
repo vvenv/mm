@@ -21,7 +21,9 @@ import {
   encodeSharePayload,
   parseShareIdFromSearch,
   clearShareVisit,
+  inboundShareLinks,
   markShareVisit,
+  reuseUnchangedShare,
   takeShareExit,
   SHARE_VISIT_KEY,
   searchEmojis,
@@ -788,6 +790,31 @@ test("createShareLinks prefers builtin short then external then long-only", asyn
   markShareVisit(visit);
   clearShareVisit(visit);
   assert.equal(takeShareExit(visit), false);
+
+  const opened = inboundShareLinks({
+    id: "Ab12Cd34",
+    payload: "abcPAYLOAD",
+    origin: "https://mm.wenfu.dev/",
+  });
+  assert.equal(opened.shortUrl, "https://s.wenfu.dev/Ab12Cd34");
+  assert.equal(opened.longUrl, "https://mm.wenfu.dev/#v1=abcPAYLOAD");
+  const fromHash = inboundShareLinks({
+    hash: "#v1=abcPAYLOAD",
+    origin: "https://mm.wenfu.dev",
+  });
+  assert.equal(fromHash.longUrl, "https://mm.wenfu.dev/#v1=abcPAYLOAD");
+  assert.equal(fromHash.shortUrl, "");
+  const savedShare = {
+    snapshot: '{"title":"A"}',
+    longUrl: opened.longUrl,
+    shortUrl: opened.shortUrl,
+  };
+  assert.deepEqual(reuseUnchangedShare(savedShare, savedShare.snapshot), {
+    longUrl: opened.longUrl,
+    shortUrl: opened.shortUrl,
+  });
+  assert.equal(reuseUnchangedShare(savedShare, '{"title":"B"}'), null);
+  assert.equal(reuseUnchangedShare(null, savedShare.snapshot), null);
 
   const built = await shortenWithBuiltin("abcPAYLOAD", {
     apiOrigin: "https://s.wenfu.dev",

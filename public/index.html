@@ -1650,7 +1650,9 @@
         parseShareHash,
         parseShareIdFromSearch,
         clearShareVisit,
+        inboundShareLinks,
         markShareVisit,
+        reuseUnchangedShare,
         takeShareExit,
         isImportableFile,
         looksLikeOutlinePaste,
@@ -1668,7 +1670,7 @@
         writeFontId,
         writeThemeId,
         shouldConfirmOverwrite,
-      } from "./mm-core.js?v=20261103g";
+      } from "./mm-core.js?v=20261103h";
 
       const store = createLocalStore();
       const history = createHistory();
@@ -1784,6 +1786,8 @@
       /** Left a share link in this tab; show the demo without replacing the saved doc. */
       let shareExitDemo = false;
       let shareLinks = { longUrl: "", shortUrl: "" };
+      /** Last link issued for this exact tree, including the one this page was opened from. */
+      let shareOrigin = null;
 
       const NS = "http://www.w3.org/2000/svg";
       const LONG_PRESS_MS = 520;
@@ -4295,6 +4299,31 @@
         shareSystem.hidden = !canNativeShare;
       }
 
+      function applyShareResult(links) {
+        shareLinks = {
+          longUrl: links.longUrl || "",
+          shortUrl: links.shortUrl || "",
+        };
+        shareLongUrl.placeholder = "";
+        shareShortUrl.placeholder = shareLinks.shortUrl
+          ? ""
+          : shareLinks.longUrl.length > EXTERNAL_SHORTEN_MAX_LEN
+            ? "导图过大，请用长链"
+            : "短链不可用";
+        syncShareModalFields();
+        shareCopyLong.disabled = !shareLinks.longUrl;
+        shareLongUrl.focus();
+        shareLongUrl.select();
+      }
+
+      function rememberShare(snapshot, links) {
+        shareOrigin = {
+          snapshot,
+          longUrl: links.longUrl || "",
+          shortUrl: links.shortUrl || "",
+        };
+      }
+
       async function openShare() {
         if (editing) commitEdit(true);
         if (noteEditing) commitNote(true);
@@ -4307,23 +4336,19 @@
         shareCopyShort.disabled = true;
         shareSystem.hidden = true;
         shareModal.classList.add("show");
+        const snapshot = JSON.stringify(cloneData(tree));
+        const reused = reuseUnchangedShare(shareOrigin, snapshot);
+        if (reused) {
+          applyShareResult(reused);
+          return;
+        }
         try {
           const result = await createShareLinks(tree, location.origin);
-          shareLinks = {
+          rememberShare(snapshot, {
             longUrl: result.longUrl,
             shortUrl: result.shortUrl || "",
-          };
-          shareLongUrl.placeholder = "";
-          shareShortUrl.placeholder =
-            result.shortened && result.shortUrl
-              ? ""
-              : result.longUrl.length > EXTERNAL_SHORTEN_MAX_LEN
-                ? "导图过大，请用长链"
-                : "短链不可用";
-          syncShareModalFields();
-          shareCopyLong.disabled = !shareLinks.longUrl;
-          shareLongUrl.focus();
-          shareLongUrl.select();
+          });
+          applyShareResult(shareOrigin);
         } catch (error) {
           shareLongUrl.placeholder = "生成失败";
           shareShortUrl.placeholder = "生成失败";
@@ -4510,7 +4535,7 @@
         if (event.target === downloadModal) closeDownload();
       });
 
-      async function openSharedTree(sharedTree) {
+      async function openSharedTree(sharedTree, source) {
         shareGuest = true;
         tree = sharedTree;
         fileName = `${(sharedTree.title || "mindmap").replace(/[\\/:*?"<>|]+/g, "-").trim() || "mindmap"}.md`;
@@ -4519,6 +4544,8 @@
         svg.setAttribute("aria-label", pageTitleOf(tree));
         appMode = "view";
         writeAppMode(appMode);
+        const links = inboundShareLinks({ ...source, origin: location.origin });
+        if (links) rememberShare(JSON.stringify(cloneData(tree)), links);
         markShareVisit();
         syncShareBanner();
       }
@@ -4528,13 +4555,13 @@
       const shareId = parseShareIdFromSearch(location.search);
       let openedShare = false;
       if (sharedFromHash) {
-        await openSharedTree(sharedFromHash);
+        await openSharedTree(sharedFromHash, { hash: shareHashRaw });
         openedShare = true;
       } else if (shareId) {
         try {
           const payload = await fetchSharePayload(shareId);
           const sharedFromShort = await decodeSharePayload(payload);
-          await openSharedTree(sharedFromShort);
+          await openSharedTree(sharedFromShort, { id: shareId, payload });
           openedShare = true;
         } catch (error) {
           toast(error.message || "短链打开失败");
