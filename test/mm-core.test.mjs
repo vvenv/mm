@@ -27,6 +27,12 @@ import {
   normalizeFontId,
   normalizeThemeId,
   parseMarkdown,
+  parseImportFile,
+  parseJsonTree,
+  parseOpml,
+  parseInteractiveHtml,
+  detectImportFormat,
+  isImportableFile,
   looksLikeOutlinePaste,
   parseOutlinePaste,
   subtreeToOutline,
@@ -580,4 +586,88 @@ test("selection redraw invalidates native dblclick targets", () => {
     { id: "node-1-redrawn", type: "click" },
   ]);
   assert.ok(!events.some((e) => e.type === "dblclick"));
+});
+
+test("detectImportFormat and isImportableFile cover export formats", () => {
+  assert.equal(detectImportFormat("a.md"), "markdown");
+  assert.equal(detectImportFormat("a.opml"), "opml");
+  assert.equal(detectImportFormat("a.json"), "json");
+  assert.equal(detectImportFormat("a.html"), "html");
+  assert.equal(detectImportFormat("a.xmind"), "xmind");
+  assert.equal(detectImportFormat("", "", '{"title":"T","children":[]}'), "json");
+  assert.equal(detectImportFormat("", "", "<opml version=\"2.0\"><body></body></opml>"), "opml");
+  assert.equal(isImportableFile({ name: "demo.xmind", type: "" }), true);
+  assert.equal(isImportableFile({ name: "demo.opml", type: "text/xml" }), true);
+  assert.equal(isImportableFile({ name: "nope.bin", type: "application/octet-stream" }), false);
+});
+
+test("parseJsonTree / parseOpml / parseInteractiveHtml round-trip export", () => {
+  const tree = parseMarkdown(`# 🗺️ Root
+
+- 📦 a
+  subtitle
+  > memo
+  - b
+`);
+  const json = buildDownload(tree, "json", "demo");
+  const fromJson = parseJsonTree(json.content);
+  assert.equal(fromJson.title, "Root");
+  assert.equal(fromJson.icon, "🗺️");
+  assert.equal(fromJson.children[0].title, "a");
+  assert.equal(fromJson.children[0].icon, "📦");
+  assert.equal(fromJson.children[0].desc, "subtitle");
+  assert.equal(fromJson.children[0].note, "memo");
+  assert.equal(fromJson.children[0].children[0].title, "b");
+
+  const opml = buildDownload(tree, "opml", "demo");
+  // topicTitle embeds icon into text; import splits it back
+  const fromOpml = parseOpml(opml.content);
+  assert.equal(fromOpml.title, "Root");
+  assert.equal(fromOpml.icon, "🗺️");
+  assert.equal(fromOpml.children[0].title, "a");
+  assert.equal(fromOpml.children[0].icon, "📦");
+  assert.equal(fromOpml.children[0].desc, "subtitle");
+  assert.equal(fromOpml.children[0].note, "memo");
+
+  const html = buildDownload(tree, "html", "demo");
+  const fromHtml = parseInteractiveHtml(html.content);
+  assert.deepEqual(fromHtml, fromJson);
+});
+
+test("parseImportFile round-trips markdown json opml html xmind", async () => {
+  const tree = parseMarkdown(`# Hello
+
+- a
+  note line
+  > memo
+  - b
+`);
+  const md = await parseImportFile(toMarkdown(tree), { name: "hello.md" });
+  assert.equal(md.format, "markdown");
+  assert.equal(md.tree.title, "Hello");
+  assert.equal(md.tree.children[0].children[0].title, "b");
+
+  const jsonPacked = buildDownload(tree, "json", "hello");
+  const json = await parseImportFile(jsonPacked.content, { name: "hello.json" });
+  assert.equal(json.format, "json");
+  assert.equal(json.tree.children[0].note, "memo");
+
+  const opmlPacked = buildDownload(tree, "opml", "hello");
+  const opml = await parseImportFile(opmlPacked.content, { name: "hello.opml" });
+  assert.equal(opml.format, "opml");
+  assert.equal(opml.tree.children[0].desc, "note line");
+
+  const htmlPacked = buildDownload(tree, "html", "hello");
+  const html = await parseImportFile(htmlPacked.content, { name: "hello.html" });
+  assert.equal(html.format, "html");
+  assert.equal(html.tree.title, "Hello");
+
+  const xmindPacked = buildDownload(tree, "xmind", "hello");
+  const xmind = await parseImportFile(xmindPacked.content, { name: "hello.xmind" });
+  assert.equal(xmind.format, "xmind");
+  assert.equal(xmind.tree.title, "Hello");
+  assert.equal(xmind.tree.children[0].title, "a");
+  assert.equal(xmind.tree.children[0].desc, "note line");
+  assert.equal(xmind.tree.children[0].note, "memo");
+  assert.equal(xmind.tree.children[0].children[0].title, "b");
 });

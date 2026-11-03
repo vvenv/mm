@@ -196,6 +196,14 @@ export const DOWNLOAD_FORMATS = [
   { id: "json", label: "JSON", ext: ".json", mime: "application/json;charset=utf-8", available: true },
 ];
 
+/** File picker `accept` for import — mirrors export formats plus plain text. */
+export const IMPORT_ACCEPT =
+  ".md,.markdown,.txt,.opml,.json,.html,.htm,.xmind,text/markdown,text/plain,text/html,application/json,text/xml,application/xml,application/vnd.xmind.workbook";
+
+const IMPORT_NAME_RE = /\.(md|markdown|txt|opml|json|html|htm|xmind)$/i;
+const IMPORT_MIME_RE =
+  /^(text\/(markdown|plain|html|xml|x-opml)|application\/(json|xml|vnd\.xmind\.workbook))(\s|;|$)/i;
+
 const DOWNLOAD_NAME_EXTS = "md|markdown|txt|html|xmind|opml|json";
 
 const CRC_TABLE = (() => {
@@ -301,6 +309,45 @@ function zipStore(entries) {
     u16le(0),
   ]);
   return concatBytes([...locals, centralDir, end]);
+}
+
+async function inflateRaw(data) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("当前环境无法解压 XMind");
+  }
+  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Read local-file entries from a ZIP (STORE / DEFLATE). Enough for XMind packages. */
+async function unzipEntries(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entries = [];
+  let offset = 0;
+  while (offset + 30 <= bytes.length) {
+    if (view.getUint32(offset, true) !== 0x04034b50) break;
+    const method = view.getUint16(offset + 8, true);
+    const flags = view.getUint16(offset + 6, true);
+    let compSize = view.getUint32(offset + 18, true);
+    const nameLen = view.getUint16(offset + 26, true);
+    const extraLen = view.getUint16(offset + 28, true);
+    const nameStart = offset + 30;
+    const name = new TextDecoder().decode(bytes.subarray(nameStart, nameStart + nameLen));
+    let dataStart = nameStart + nameLen + extraLen;
+    if (flags & 0x8) {
+      // Sizes live in a data descriptor after the payload — unsupported here.
+      throw new Error("不支持的 XMind 压缩格式");
+    }
+    const compressed = bytes.subarray(dataStart, dataStart + compSize);
+    let data = compressed;
+    if (method === 8) data = await inflateRaw(compressed);
+    else if (method !== 0) throw new Error("不支持的 XMind 压缩方法");
+    entries.push({ name, data });
+    offset = dataStart + compSize;
+  }
+  if (!entries.length) throw new Error("无效的 XMind 文件");
+  return entries;
 }
 
 function topicTitle(node) {
@@ -1077,6 +1124,328 @@ export function buildDownload(tree, formatId = "markdown", name) {
     return { filename, mime: format.mime, content: toJson(tree) };
   }
   throw new Error(`${format.label} 即将支持`);
+}
+
+function unescapeXml(text) {
+  return String(text)
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function xmlAttr(attrs, name) {
+  const dq = attrs.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, "i"));
+  if (dq) return unescapeXml(dq[1]);
+  const sq = attrs.match(new RegExp(`\\b${name}\\s*=\\s*'([^']*)'`, "i"));
+  if (sq) return unescapeXml(sq[1]);
+  return "";
+}
+
+/** Split export-joined notes (`desc\\n\\nnote`) back into fields. */
+function applyJoinedNotes(node, notes) {
+  const text = String(notes || "").replace(/^\uFEFF/, "").trimEnd();
+  if (!text.trim()) return;
+  const parts = text.split(/\n\n/);
+  if (parts.length >= 2) {
+    node.desc = parts[0];
+    node.note = parts.slice(1).join("\n\n");
+  } else {
+    node.note = text;
+  }
+}
+
+function nodeFromTopicTitle(raw) {
+  const headed = splitLeadingIcon(String(raw || "").trim() || "未命名");
+  const node = { title: headed.title || "未命名", children: [] };
+  if (headed.icon) node.icon = headed.icon;
+  return node;
+}
+
+export function normalizeImportedTree(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("无效的导图 JSON");
+  }
+  const node = {
+    title: data.title != null ? String(data.title) : "Mindmap",
+    children: Array.isArray(data.children)
+      ? data.children.map((child) => normalizeImportedTree(child))
+      : [],
+  };
+  if (data.desc != null && String(data.desc)) node.desc = String(data.desc);
+  if (data.note != null && String(data.note)) node.note = String(data.note);
+  if (data.icon != null && String(data.icon).trim()) node.icon = String(data.icon).trim();
+  if (typeof data.open === "boolean") node.open = data.open;
+  return node;
+}
+
+export function parseJsonTree(text) {
+  let data;
+  try {
+    data = JSON.parse(String(text));
+  } catch {
+    throw new Error("无效的 JSON");
+  }
+  return normalizeImportedTree(data);
+}
+
+function parseOpmlOutlines(fragment) {
+  const re = /<outline\b([^>]*)>|<\/outline>/gi;
+  const stack = [{ children: [] }];
+  let match;
+  while ((match = re.exec(fragment))) {
+    const token = match[0];
+    if (token.startsWith("</")) {
+      if (stack.length < 2) continue;
+      const node = stack.pop();
+      stack[stack.length - 1].children.push(node);
+      continue;
+    }
+    const attrs = match[1] || "";
+    const selfClose = /\/\s*$/.test(attrs);
+    const clean = attrs.replace(/\/\s*$/, "");
+    const node = nodeFromTopicTitle(xmlAttr(clean, "text") || xmlAttr(clean, "title"));
+    const note = xmlAttr(clean, "_note") || xmlAttr(clean, "note");
+    if (note) applyJoinedNotes(node, note);
+    if (selfClose) stack[stack.length - 1].children.push(node);
+    else stack.push(node);
+  }
+  while (stack.length > 1) {
+    const node = stack.pop();
+    stack[stack.length - 1].children.push(node);
+  }
+  return stack[0].children;
+}
+
+export function parseOpml(text) {
+  const src = String(text);
+  if (!/<opml\b/i.test(src)) throw new Error("不是有效的 OPML");
+  const body = src.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  if (!body) throw new Error("OPML 缺少 body");
+  const roots = parseOpmlOutlines(body[1]);
+  if (!roots.length) throw new Error("没有解析到任何大纲节点");
+  if (roots.length === 1) return roots[0];
+  const headTitle = src.match(/<head\b[^>]*>[\s\S]*?<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = headTitle ? unescapeXml(headTitle[1]).trim() : "Mindmap";
+  return { title: title || "Mindmap", children: roots };
+}
+
+function extractJsonObject(source, marker) {
+  const idx = String(source).indexOf(marker);
+  if (idx < 0) return null;
+  let i = idx + marker.length;
+  while (i < source.length && /\s/.test(source[i])) i += 1;
+  if (source[i] !== "{" && source[i] !== "[") return null;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  for (let j = i; j < source.length; j += 1) {
+    const ch = source[j];
+    if (inStr) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") depth += 1;
+    else if (ch === "}" || ch === "]") {
+      depth -= 1;
+      if (depth === 0) return source.slice(i, j + 1);
+    }
+  }
+  return null;
+}
+
+export function parseInteractiveHtml(html) {
+  const raw =
+    extractJsonObject(html, "const tree =") ||
+    extractJsonObject(html, "const tree=") ||
+    extractJsonObject(html, "var tree =") ||
+    extractJsonObject(html, "let tree =");
+  if (!raw) throw new Error("HTML 中未找到导图数据");
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error("HTML 导图数据无效");
+  }
+  return normalizeImportedTree(data);
+}
+
+function fromXmindTopic(topic) {
+  if (!topic || typeof topic !== "object") throw new Error("无效的 XMind 主题");
+  const node = nodeFromTopicTitle(topic.title);
+  const plain = topic.notes && topic.notes.plain;
+  const notes =
+    plain && typeof plain === "object" && plain.content != null
+      ? plain.content
+      : typeof plain === "string"
+        ? plain
+        : "";
+  if (notes) applyJoinedNotes(node, notes);
+  const attached =
+    (topic.children && (topic.children.attached || topic.children.detached)) || [];
+  if (Array.isArray(attached)) node.children = attached.map(fromXmindTopic);
+  return node;
+}
+
+function parseXmindContentJson(text) {
+  let sheets;
+  try {
+    sheets = JSON.parse(String(text));
+  } catch {
+    throw new Error("无效的 XMind content.json");
+  }
+  const sheet = Array.isArray(sheets) ? sheets[0] : sheets;
+  if (!sheet || !sheet.rootTopic) throw new Error("XMind 缺少根主题");
+  return fromXmindTopic(sheet.rootTopic);
+}
+
+function parseXmindContentXml(text) {
+  const src = String(text);
+  const titleRe = /<title[^>]*>([\s\S]*?)<\/title>/i;
+  const rootMatch = src.match(/<topic\b[^>]*>/i);
+  if (!rootMatch) throw new Error("XMind 缺少根主题");
+
+  function parseTopics(fragment) {
+    const re = /<topic\b([^>]*)>|<\/topic>/gi;
+    const stack = [{ children: [] }];
+    let match;
+    while ((match = re.exec(fragment))) {
+      const token = match[0];
+      if (token.startsWith("</")) {
+        if (stack.length < 2) continue;
+        const node = stack.pop();
+        stack[stack.length - 1].children.push(node);
+        continue;
+      }
+      const attrs = match[1] || "";
+      const selfClose = /\/\s*$/.test(attrs);
+      const start = match.index + token.length;
+      let title = "未命名";
+      if (!selfClose) {
+        const rest = fragment.slice(start);
+        const titleMatch = rest.match(titleRe);
+        if (titleMatch && rest.slice(0, titleMatch.index).indexOf("<topic") === -1) {
+          title = unescapeXml(titleMatch[1]).trim() || "未命名";
+        }
+      }
+      const node = nodeFromTopicTitle(title);
+      if (selfClose) stack[stack.length - 1].children.push(node);
+      else stack.push(node);
+    }
+    while (stack.length > 1) {
+      const node = stack.pop();
+      stack[stack.length - 1].children.push(node);
+    }
+    return stack[0].children;
+  }
+
+  const sheetBody = src.match(/<sheet\b[^>]*>([\s\S]*?)<\/sheet>/i);
+  const scope = sheetBody ? sheetBody[1] : src;
+  const topics = parseTopics(scope);
+  if (!topics.length) throw new Error("没有解析到任何大纲节点");
+  return topics[0];
+}
+
+export async function parseXmind(buffer) {
+  const entries = await unzipEntries(buffer);
+  const decoder = new TextDecoder();
+  const byName = new Map(entries.map((entry) => [entry.name.replace(/^\.\//, ""), entry]));
+  const json =
+    byName.get("content.json") ||
+    entries.find((entry) => /(?:^|\/)content\.json$/i.test(entry.name));
+  if (json) return parseXmindContentJson(decoder.decode(json.data));
+  const xml =
+    byName.get("content.xml") ||
+    entries.find((entry) => /(?:^|\/)content\.xml$/i.test(entry.name));
+  if (xml) return parseXmindContentXml(decoder.decode(xml.data));
+  throw new Error("XMind 中未找到 content.json / content.xml");
+}
+
+/**
+ * Guess import format from filename, MIME, and an optional text sample.
+ * Binary `.xmind` should be detected by name/MIME before reading as text.
+ */
+export function detectImportFormat(name = "", mime = "", sample = "") {
+  const lower = String(name || "").toLowerCase();
+  if (/\.xmind$/i.test(lower)) return "xmind";
+  if (/\.opml$/i.test(lower)) return "opml";
+  if (/\.json$/i.test(lower)) return "json";
+  if (/\.html?$/i.test(lower)) return "html";
+  if (/\.(md|markdown|txt)$/i.test(lower)) return "markdown";
+  const type = String(mime || "").toLowerCase();
+  if (type.includes("xmind")) return "xmind";
+  if (type.includes("json")) return "json";
+  if (type.includes("html")) return "html";
+  if (type.includes("opml") || type === "text/xml" || type === "application/xml") {
+    if (/<opml\b/i.test(sample) || !sample) return "opml";
+  }
+  const head = String(sample || "").slice(0, 4000).trim();
+  if (/^PK\x03\x04/.test(head)) return "xmind";
+  if (/<opml\b/i.test(head)) return "opml";
+  if (/<!DOCTYPE\s+html|<html\b/i.test(head)) return "html";
+  if (/^[\[{]/.test(head)) {
+    try {
+      const data = JSON.parse(sample);
+      if (data && typeof data === "object" && ("title" in data || "children" in data)) {
+        return "json";
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return "markdown";
+}
+
+export function isImportableFile(file) {
+  if (!file) return false;
+  const name = file.name || "";
+  if (IMPORT_NAME_RE.test(name)) return true;
+  const type = file.type || "";
+  if (type && IMPORT_MIME_RE.test(type)) return true;
+  if (type && /^text\//i.test(type)) return true;
+  return false;
+}
+
+export function parseImportText(text, format = "markdown") {
+  if (format === "json") return parseJsonTree(text);
+  if (format === "opml") return parseOpml(text);
+  if (format === "html") return parseInteractiveHtml(text);
+  if (format === "markdown") return parseMarkdown(text);
+  throw new Error("未知导入格式");
+}
+
+/** Parse a File/Blob (or preloaded buffer/text) into a mindmap tree. */
+export async function parseImportFile(file, options = {}) {
+  const name = options.name || (file && file.name) || "";
+  const type = options.type || (file && file.type) || "";
+  const formatHint = options.format || detectImportFormat(name, type, "");
+
+  if (formatHint === "xmind") {
+    let buffer;
+    if (file instanceof ArrayBuffer) buffer = file;
+    else if (file instanceof Uint8Array) buffer = file;
+    else if (file && typeof file.arrayBuffer === "function") buffer = await file.arrayBuffer();
+    else throw new Error("无法读取 XMind 文件");
+    return { tree: await parseXmind(buffer), format: "xmind" };
+  }
+
+  let text;
+  if (typeof file === "string") text = file;
+  else if (file instanceof ArrayBuffer) text = new TextDecoder().decode(file);
+  else if (file instanceof Uint8Array) text = new TextDecoder().decode(file);
+  else if (file && typeof file.text === "function") text = await file.text();
+  else throw new Error("无法读取导入文件");
+
+  const format = options.format || detectImportFormat(name, type, text);
+  if (format === "xmind") {
+    const encoded = new TextEncoder().encode(text);
+    return { tree: await parseXmind(encoded.buffer), format: "xmind" };
+  }
+  return { tree: parseImportText(text, format), format };
 }
 
 export function createLocalStore(storage = globalThis.localStorage, key = STORAGE_KEY) {
