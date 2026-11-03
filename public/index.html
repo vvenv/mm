@@ -316,9 +316,11 @@
         -webkit-user-select: none;
         user-select: none;
       }
+      .file-menu,
       .settings {
         position: relative;
       }
+      .file-menu > button.icon,
       .settings > button.icon {
         margin: 0;
         padding: 0;
@@ -333,30 +335,24 @@
         justify-content: center;
         cursor: pointer;
       }
+      .file-menu > button.icon:hover,
       .settings > button.icon:hover {
         background: var(--hover);
       }
+      .file-menu > button.icon svg,
       .settings > button.icon svg {
         width: 16px;
         height: 16px;
         display: block;
       }
+      .file-menu-panel,
       .settings-panel {
         position: absolute;
         top: calc(100% + 8px);
-        right: 0;
-        width: max-content;
-        min-width: 200px;
-        max-width: min(280px, calc(100vw - 28px));
         margin: 0;
-        padding: 12px;
         border: 1px solid var(--border);
-        border-radius: 8px;
         background: var(--surface);
-        color: var(--fg-soft);
         box-shadow: var(--shadow);
-        font-size: 13px;
-        line-height: 1.45;
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
@@ -366,11 +362,74 @@
           transform 0.15s,
           visibility 0.15s;
       }
+      .file-menu-panel {
+        left: 0;
+        z-index: 5;
+        min-width: 168px;
+        max-width: min(240px, calc(100vw - 28px));
+        padding: 4px 0;
+        border-radius: 10px;
+      }
+      .settings-panel {
+        right: 0;
+        width: max-content;
+        min-width: 200px;
+        max-width: min(280px, calc(100vw - 28px));
+        padding: 12px;
+        border-radius: 8px;
+        color: var(--fg-soft);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .file-menu.open .file-menu-panel,
       .settings.open .settings-panel {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
         transform: translateY(0);
+      }
+      .file-menu-panel .sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--hairline);
+      }
+      .toolbar .file-menu-panel button {
+        display: flex;
+        width: 100%;
+        height: auto;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        padding: 9px 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--fg);
+        text-align: left;
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      .toolbar .file-menu-panel button:hover:not(:disabled) {
+        border-color: transparent;
+        background: var(--hover);
+      }
+      .toolbar .file-menu-panel button:disabled {
+        opacity: 0.35;
+        cursor: default;
+        pointer-events: none;
+      }
+      .toolbar .file-menu-panel button.danger {
+        color: var(--danger);
+      }
+      .toolbar .file-menu-panel button svg {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+      }
+      .toolbar .file-menu-panel button span {
+        flex: 1 1 auto;
       }
       .settings-row {
         display: flex;
@@ -814,6 +873,90 @@
   </head>
   <body>
     <div class="toolbar">
+      <div class="file-menu" id="fileMenu">
+        <button
+          type="button"
+          class="icon"
+          id="fileMenuBtn"
+          aria-label="菜单"
+          aria-controls="fileMenuPanel"
+          aria-expanded="false"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M4 6h16" />
+            <path d="M4 12h16" />
+            <path d="M4 18h16" />
+          </svg>
+        </button>
+        <div
+          class="file-menu-panel"
+          id="fileMenuPanel"
+          role="menu"
+          aria-label="文件"
+        >
+          <button type="button" id="uploadBtn" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m17 8-5-5-5 5" />
+              <path d="M12 3v12" />
+            </svg>
+            <span>导入 Markdown</span>
+          </button>
+          <button type="button" id="downloadBtn" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M12 15V3" />
+            </svg>
+            <span>导出</span>
+          </button>
+          <div class="sep" aria-hidden="true"></div>
+          <button type="button" class="danger" id="closeDocBtn" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"
+              />
+              <path d="M15 3v6h6" />
+              <path d="m10 12 4 4" />
+              <path d="m14 12-4 4" />
+            </svg>
+            <span>关闭文档</span>
+          </button>
+        </div>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
       <div
         class="mode-switch"
         id="modeSwitch"
@@ -886,76 +1029,6 @@
       </span>
     </div>
     <div class="toolbar toolbar-end">
-      <span class="tip" data-tooltip="导入 Markdown">
-        <button
-          type="button"
-          class="icon"
-          id="uploadBtn"
-          aria-label="导入"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="m17 8-5-5-5 5" />
-            <path d="M12 3v12" />
-          </svg>
-        </button>
-      </span>
-      <span class="tip" data-tooltip="导出">
-        <button
-          type="button"
-          class="icon"
-          id="downloadBtn"
-          aria-label="导出"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="m7 10 5 5 5-5" />
-            <path d="M12 15V3" />
-          </svg>
-        </button>
-      </span>
-      <span class="tip" data-tooltip="关闭文档">
-        <button
-          type="button"
-          class="icon"
-          id="closeDocBtn"
-          aria-label="关闭文档"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"
-            />
-            <path d="M15 3v6h6" />
-            <path d="m10 12 4 4" />
-            <path d="m14 12-4 4" />
-          </svg>
-        </button>
-      </span>
-      <span class="sep" aria-hidden="true"></span>
       <div class="settings" id="settings">
         <button
           type="button"
@@ -1290,7 +1363,7 @@
                 desc: "列表项下的段落会变成副标题",
                 children: [],
               },
-              { title: "拖放或工具栏导入", desc: "覆盖前会确认", children: [] },
+              { title: "拖放或菜单导入", desc: "覆盖前会确认", children: [] },
             ],
           },
           {
@@ -1326,7 +1399,7 @@
               { title: "设置里切换全局字体", children: [] },
               { title: "撤销 ⌘Z · 重做 ⌘⇧Z", children: [] },
               {
-                title: "工具栏可关闭文档",
+                title: "菜单可关闭文档",
                 desc: "清除本地自动保存并回到欢迎页",
                 children: [],
               },
@@ -1378,6 +1451,7 @@
       const ctxMenu = document.getElementById("ctxMenu");
       const undoBtn = document.getElementById("undoBtn");
       const uploadBtn = document.getElementById("uploadBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
       const closeDocBtn = document.getElementById("closeDocBtn");
       const modeSwitch = document.getElementById("modeSwitch");
       const themeSelect = document.getElementById("themeSelect");
@@ -1552,11 +1626,11 @@
           btn.tabIndex = on ? 0 : -1;
         });
         uploadBtn.disabled = !canEdit();
-        uploadBtn.parentElement.dataset.tooltip = canEdit()
+        uploadBtn.title = canEdit()
           ? "导入 Markdown"
           : "只读模式下不能导入";
         closeDocBtn.disabled = !canEdit();
-        closeDocBtn.parentElement.dataset.tooltip = canEdit()
+        closeDocBtn.title = canEdit()
           ? "关闭文档"
           : "只读模式下不能关闭文档";
         undoBtn.parentElement.dataset.tooltip = canEdit()
@@ -3720,8 +3794,14 @@
         }
       }
 
-      uploadBtn.addEventListener("click", () => fileInput.click());
-      closeDocBtn.addEventListener("click", requestCloseDocument);
+      uploadBtn.addEventListener("click", () => {
+        setFileMenuOpen(false);
+        fileInput.click();
+      });
+      closeDocBtn.addEventListener("click", () => {
+        setFileMenuOpen(false);
+        requestCloseDocument();
+      });
       modeSwitch.addEventListener("click", (event) => {
         const btn = event.target.closest("[data-mode]");
         if (!btn) return;
@@ -3748,29 +3828,50 @@
       fontSelect.addEventListener("change", () => {
         setFont(fontSelect.value);
       });
-      document
-        .getElementById("downloadBtn")
-        .addEventListener("click", openDownload);
+      downloadBtn.addEventListener("click", () => {
+        setFileMenuOpen(false);
+        openDownload();
+      });
+      const fileMenu = document.getElementById("fileMenu");
+      const fileMenuBtn = document.getElementById("fileMenuBtn");
       const settings = document.getElementById("settings");
       const settingsBtn = document.getElementById("settingsBtn");
+      function setFileMenuOpen(open) {
+        fileMenu.classList.toggle("open", open);
+        fileMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) setSettingsOpen(false);
+      }
       function setSettingsOpen(open) {
         settings.classList.toggle("open", open);
         settingsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) setFileMenuOpen(false);
       }
+      fileMenuBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setFileMenuOpen(!fileMenu.classList.contains("open"));
+      });
       settingsBtn.addEventListener("click", (event) => {
         event.stopPropagation();
         setSettingsOpen(!settings.classList.contains("open"));
       });
       window.addEventListener("pointerdown", (event) => {
-        if (!settings.classList.contains("open")) return;
-        if (settings.contains(event.target)) return;
-        setSettingsOpen(false);
+        if (
+          fileMenu.classList.contains("open") &&
+          !fileMenu.contains(event.target)
+        )
+          setFileMenuOpen(false);
+        if (
+          settings.classList.contains("open") &&
+          !settings.contains(event.target)
+        )
+          setSettingsOpen(false);
       });
       window.addEventListener(
         "keydown",
         (event) => {
-          if (event.key === "Escape" && settings.classList.contains("open"))
-            setSettingsOpen(false);
+          if (event.key !== "Escape") return;
+          if (fileMenu.classList.contains("open")) setFileMenuOpen(false);
+          if (settings.classList.contains("open")) setSettingsOpen(false);
         },
         true,
       );
