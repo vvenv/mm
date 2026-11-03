@@ -376,6 +376,10 @@
       .history-chrome .tip + .tip {
         box-shadow: inset 1px 0 0 var(--border);
       }
+      .history-chrome .tip[data-tooltip]:focus-within:not(:hover):not(:focus-visible)::after {
+        opacity: 0;
+        visibility: hidden;
+      }
       .history-chrome .tip:first-child button {
         border-radius: 7px 0 0 7px;
       }
