@@ -2,11 +2,12 @@
  * Bump CACHE whenever public assets change (keep in sync with ?v= in index.html).
  *
  * JS modules must be network-first: cache-first + pathname keys can pair a fresh
- * index.html with a stale mm-core.js after deploy (missing named exports). */
-const CACHE = "mm-20261103h";
+ * index.html with a stale app.js / mm-core.js after deploy (missing named exports). */
+const CACHE = "mm-20261103i";
 const ASSETS = [
   "/",
   "/index.html",
+  "/app.js",
   "/mm-core.js",
   "/emoji-data.js",
   "/manifest.webmanifest",

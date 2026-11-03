@@ -57,7 +57,9 @@ for _ in 1 2 3 4 5; do
   sleep 1
 done
 [ "$ok" = 1 ] || die "HTTPS 首页检查失败（可能被 CDN 暂时拦截）"
-core_type="$(curl -fsSI -A "$UA" "https://${DOMAIN}/mm-core.js" | tr -d '\r' | grep -i '^content-type:' | head -1)"
-printf '%s\n' "$core_type" | grep -Eqi 'javascript|ecmascript' || die "mm-core.js Content-Type 异常：$core_type"
+for js in app.js mm-core.js; do
+  js_type="$(curl -fsSI -A "$UA" "https://${DOMAIN}/$js" | tr -d '\r' | grep -i '^content-type:' | head -1)"
+  printf '%s\n' "$js_type" | grep -Eqi 'javascript|ecmascript' || die "$js Content-Type 异常：$js_type"
+done
 
 log "已发布 https://${DOMAIN}/"

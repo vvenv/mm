@@ -101,7 +101,8 @@ pnpm emoji:gen     # 从 emojibase-data 重写 public/emoji-data.js
 
 ```
 public/                 # 可直接托管的站点
-  index.html            # 页面与交互
+  index.html            # 页面壳（markup / CSS / 主题防闪）
+  app.js                # 画布与 UI 交互
   mm-core.js            # 解析 / 导出 / 存储等纯逻辑（可单测）
   emoji-data.js         # 图标选择器数据
   sw.js                 # Service Worker

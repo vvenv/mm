@@ -361,78 +361,81 @@ test("createLocalStore persists and restores tree", () => {
  * on a single pointerup (clickEdit / drag.mode select|desc).
  */
 test("Escape cancels an in-progress node drag without moving the node", () => {
-  const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
-  assert.match(html, /function cancelNodeDrag\(\)/);
-  assert.match(html, /if \(!drag \|\| drag\.kind !== "node"\) return false/);
+  const app = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
+  assert.match(app, /function cancelNodeDrag\(\)/);
+  assert.match(app, /if \(!drag \|\| drag\.kind !== "node"\) return false/);
   assert.match(
-    html,
+    app,
     /event\.key === "Escape" && \(escapeUsedForDrag \|\| cancelNodeDrag\(\)\)/,
   );
-  const commit = html.indexOf("if (!moveNodeToDrop(node, drop))");
+  const commit = app.indexOf("if (!moveNodeToDrop(node, drop))");
   assert.ok(commit > 0);
   assert.match(
-    html.slice(commit - 280, commit),
+    app.slice(commit - 280, commit),
     /if \(drag && drag\.moved && drag\.kind === "node"\)/,
   );
 });
 
-test("index.html edits on single click and does not rely on native dblclick", () => {
+test("shell markup and app.js edit on single click without native dblclick", () => {
   const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
-  assert.match(html, /beginEdit\(/);
-  assert.match(html, /clickEdit:/);
-  assert.match(html, /from "\.\/mm-core\.js(?:\?[^"]*)?"/);
-  assert.equal(/addEventListener\(\s*["']dblclick["']/.test(html), false);
-  assert.equal(/recognizeNodeTap/.test(html), false);
-  assert.equal(/DOUBLE_TAP_MS/.test(html), false);
+  const app = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
+  const shell = `${html}\n${app}`;
+  assert.match(html, /src="\.\/app\.js(?:\?[^"]*)?"/);
+  assert.match(app, /from "\.\/mm-core\.js(?:\?[^"]*)?"/);
+  assert.match(app, /beginEdit\(/);
+  assert.match(app, /clickEdit:/);
+  assert.equal(/addEventListener\(\s*["']dblclick["']/.test(shell), false);
+  assert.equal(/recognizeNodeTap/.test(shell), false);
+  assert.equal(/DOUBLE_TAP_MS/.test(shell), false);
   assert.match(html, /ctx-menu/);
   assert.match(html, /confirmModal/);
   assert.match(html, /downloadModal/);
   assert.match(html, /id="closeDocBtn"/);
-  assert.match(html, /requestCloseDocument/);
-  assert.match(html, /closeDocument/);
-  assert.match(html, /关闭当前文档？/);
-  assert.match(html, /store\.clear\(\)/);
-  assert.match(html, /缩进段落 → 副标题/);
+  assert.match(app, /requestCloseDocument/);
+  assert.match(app, /closeDocument/);
+  assert.match(shell, /关闭当前文档？/);
+  assert.match(app, /store\.clear\(\)/);
+  assert.match(app, /缩进段落 → 副标题/);
   assert.match(html, /undoBtn/);
   assert.match(html, /redoBtn/);
-  assert.match(html, /showCtxMenu/);
-  assert.match(html, /LONG_PRESS_MS/);
-  assert.match(html, /isSecondaryPointer/);
-  assert.match(html, /data-node-path/);
-  assert.match(html, /data-act="desc"/);
-  assert.match(html, /beginEdit\(selected, "desc"\)/);
+  assert.match(app, /showCtxMenu/);
+  assert.match(app, /LONG_PRESS_MS/);
+  assert.match(app, /isSecondaryPointer/);
+  assert.match(app, /data-node-path/);
+  assert.match(app, /data-act="desc"/);
+  assert.match(app, /beginEdit\(selected, "desc"\)/);
   assert.match(html, /id="modeSwitch"/);
   assert.match(html, /class="mode-switch"/);
-  assert.match(html, /切换为只读/);
-  assert.match(html, /切换为编辑/);
+  assert.match(shell, /切换为只读/);
+  assert.match(shell, /切换为编辑/);
   assert.match(html, /aria-pressed/);
   assert.match(html, /id="fontSelect"/);
   assert.match(html, /id="themeSelect"/);
-  assert.match(html, /FONT_PRESETS/);
-  assert.match(html, /THEME_PRESETS/);
-  assert.match(html, /buildLevelStyles/);
-  assert.match(html, /readFontId/);
-  assert.match(html, /writeFontId/);
-  assert.match(html, /readThemeId/);
-  assert.match(html, /writeThemeId/);
-  assert.match(html, /data-theme/);
-  assert.match(html, /var\(--map-ink\)/);
-  assert.match(html, /armLongPress/);
-  assert.match(html, /data-field", "desc"/);
-  assert.match(html, /readAppMode/);
-  assert.match(html, /beginEdit\(drag\.node, field\)/);
-  assert.match(html, /nodeShowsSubtitle/);
-  assert.match(html, /data-act="note"/);
-  assert.match(html, /openNote\(selected/);
-  assert.match(html, /notePop/);
-  assert.match(html, /iconPop/);
-  assert.match(html, /openIconPicker/);
-  assert.match(html, /createRecentIconsStore/);
-  assert.match(html, /iconSearch/);
-  assert.match(html, /searchEmojis/);
+  assert.match(app, /FONT_PRESETS/);
+  assert.match(app, /THEME_PRESETS/);
+  assert.match(app, /buildLevelStyles/);
+  assert.match(app, /readFontId/);
+  assert.match(app, /writeFontId/);
+  assert.match(app, /readThemeId/);
+  assert.match(app, /writeThemeId/);
+  assert.match(shell, /data-theme/);
+  assert.match(shell, /var\(--map-ink\)/);
+  assert.match(app, /armLongPress/);
+  assert.match(app, /data-field", "desc"/);
+  assert.match(app, /readAppMode/);
+  assert.match(app, /beginEdit\(drag\.node, field\)/);
+  assert.match(app, /nodeShowsSubtitle/);
+  assert.match(app, /data-act="note"/);
+  assert.match(app, /openNote\(selected/);
+  assert.match(shell, /notePop/);
+  assert.match(shell, /iconPop/);
+  assert.match(app, /openIconPicker/);
+  assert.match(app, /createRecentIconsStore/);
+  assert.match(shell, /iconSearch/);
+  assert.match(app, /searchEmojis/);
   assert.match(html, /flex-wrap: nowrap/);
   assert.match(html, /grid-auto-rows: 40px/);
-  assert.equal(/requestDelete/.test(html), false);
+  assert.equal(/requestDelete/.test(shell), false);
 });
 
 test("shouldConfirmOverwrite when the current map has content", () => {
