@@ -276,6 +276,11 @@
         border-radius: 8px;
         background: var(--surface-3);
       }
+      /* Author display beats UA [hidden] unless we force it. */
+      .mode-switch[hidden],
+      .toolbar > .sep[hidden] {
+        display: none !important;
+      }
       .toolbar .mode-switch button {
         height: 20px;
         margin: 0;
